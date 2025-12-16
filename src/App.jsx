@@ -3,8 +3,7 @@ import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
   signInAnonymously, 
-  onAuthStateChanged, 
-  signInWithCustomToken 
+  onAuthStateChanged
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -14,37 +13,38 @@ import {
   doc, 
   onSnapshot, 
   query, 
-  serverTimestamp, 
-  deleteDoc, 
-  getDocs, 
-  writeBatch, 
-  setDoc, 
-  where 
+  serverTimestamp,
+  deleteDoc,
+  getDocs,
+  writeBatch,
+  setDoc,
+  where
 } from "firebase/firestore";
 import { 
   Package, Truck, Hammer, LogOut, CheckCircle2, 
   LayoutDashboard, X, Search, 
-  Globe, ArrowLeft, 
-  ScanBarcode, Keyboard, CheckCheck, Loader2, 
-  Activity, Clock, Upload, FileSpreadsheet, 
-  TrendingUp, Users, AlertCircle, BarChart3, 
-  PieChart, Download, Lock, Settings, Key, Plus, Trash2, User 
+  Globe, ArrowLeft,
+  ScanBarcode, Keyboard, CheckCheck, Loader2,
+  Activity, Clock, Upload, FileSpreadsheet,
+  TrendingUp, Users, AlertCircle, BarChart3,
+  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
-const getFirebaseConfig = () => {
-  try {
-    return JSON.parse(__firebase_config);
-  } catch (e) {
-    return null;
-  }
+const firebaseConfig = {
+  apiKey: "AIzaSyAF8i2DtMi7qLjtjEgDqH7cz01hFMxwUu0",
+  authDomain: "hvglobalwarehouse.firebaseapp.com",
+  projectId: "hvglobalwarehouse",
+  storageBucket: "hvglobalwarehouse.firebasestorage.app",
+  messagingSenderId: "603320500296",
+  appId: "1:603320500296:web:8f38e782f33e5a3df5187d"
 };
 
-const config = getFirebaseConfig();
-const app = config ? initializeApp(config) : null;
-const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const appId = "hv-global-warehouse-ops-v1"; 
 
 // --- UTILITIES ---
 const parseQty = (val) => {
@@ -102,12 +102,12 @@ const PickModal = ({ isOpen, onClose, onConfirm, order }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-100">
-        <div className="bg-slate-50 p-6 border-b border-slate-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[320px] sm:max-w-sm overflow-hidden transform transition-all scale-100">
+        <div className="bg-slate-50 p-6 border-b border-slate-100 text-center">
           <h3 className="text-xl font-bold text-slate-800">Confirm Picking</h3>
-          <p className="text-slate-500 text-sm mt-1">SKU: <span className="font-mono font-bold text-slate-700">{order.sku}</span></p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1 break-all">SKU: <span className="font-mono font-bold text-slate-700">{order.sku}</span></p>
         </div>
-        <form onSubmit={handleSubmit} className="p-8 flex flex-col items-center">
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col items-center">
           <p className="text-slate-600 mb-4 font-medium">How many units?</p>
           <div className="flex items-center gap-4 mb-6 w-full">
             <input 
@@ -115,21 +115,21 @@ const PickModal = ({ isOpen, onClose, onConfirm, order }) => {
                 type="number"
                 min="1"
                 max={order.quantity}
-                className="w-full text-center text-5xl font-bold text-blue-600 border-b-2 border-blue-200 focus:border-blue-600 outline-none pb-2 bg-transparent transition-all"
+                className="w-full text-center text-4xl sm:text-5xl font-bold text-blue-600 border-b-2 border-blue-200 focus:border-blue-600 outline-none pb-2 bg-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={pickQty}
                 onChange={(e) => setPickQty(e.target.value)}
             />
           </div>
-          <div className="w-full bg-slate-100 rounded-lg p-3 text-center mb-2">
-             <p className="text-sm text-slate-500">Total Available: <strong>{order.quantity}</strong></p>
+          <div className="w-full bg-slate-100 rounded-lg p-3 text-center mb-4">
+             <p className="text-xs text-slate-500">Total Available: <strong>{order.quantity}</strong></p>
           </div>
-          <button type="submit" className="w-full mt-4 p-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200">
-            Confirm (Enter)
-          </button>
+          <div className="grid grid-cols-2 gap-3 w-full">
+            <button type="button" onClick={onClose} className="py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition">Cancel</button>
+            <button type="submit" className="py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200">
+                Confirm
+            </button>
+          </div>
         </form>
-        <div className="bg-slate-50 p-4 border-t border-slate-100 text-center">
-          <button onClick={onClose} className="text-slate-500 text-sm font-bold hover:text-slate-700">Cancel</button>
-        </div>
       </div>
     </div>
   );
@@ -147,7 +147,6 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   useEffect(() => {
     if (isOpen && role !== 'ADMIN') {
         setLoading(true);
-        // Fetch users for this role
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
         getDocs(q).then(snap => {
             const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -212,7 +211,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
                     {loading ? (
                         <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /> Loading Staff...</div>
                     ) : users.length === 0 ? (
-                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4">
+                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4 text-sm">
                             No staff found for this role. <br/>Please ask Admin to add you in Settings.
                         </div>
                     ) : (
@@ -265,7 +264,7 @@ const RoleSelection = ({ onSelectRole }) => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans overflow-y-auto">
             <LoginModal 
                 isOpen={!!loginRole} 
                 onClose={() => setLoginRole(null)} 
@@ -273,59 +272,61 @@ const RoleSelection = ({ onSelectRole }) => {
                 onLoginSuccess={handleLoginSuccess}
             />
             
-            <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div className="text-white space-y-6 p-4">
-                <div>
-                <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
-                    H.V Global<br/>Warehouse OPS
-                </h1>
-                <p className="text-slate-400 text-lg mt-4 leading-relaxed max-w-md">
-                    Real-time inventory orchestration for Finished Goods, Semi-Finished components, and WIP production lines.
-                </p>
+            <div className="w-full max-w-[2000px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+                <div className="text-white space-y-6 lg:pl-12 text-center lg:text-left">
+                    <div>
+                        <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 leading-tight">
+                            H.V Global<br/>Warehouse OPS
+                        </h1>
+                        <p className="text-slate-400 text-base sm:text-lg md:text-xl mt-4 sm:mt-6 leading-relaxed max-w-xl mx-auto lg:mx-0">
+                            Real-time inventory orchestration for Finished Goods, Semi-Finished components, and WIP production lines.
+                        </p>
+                    </div>
+                    
+                    <div className="flex flex-row justify-center lg:justify-start gap-3 pt-4">
+                        <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1 max-w-[150px]">
+                            <div className="text-emerald-400 font-bold text-lg sm:text-xl mb-1">Live Sync</div>
+                            <div className="text-slate-400 text-xs sm:text-sm">Real-time Updates</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1 max-w-[150px]">
+                            <div className="text-blue-400 font-bold text-lg sm:text-xl mb-1">Secure</div>
+                            <div className="text-slate-400 text-xs sm:text-sm">Role Access</div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div className="flex gap-4 pt-4">
-                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1">
-                    <div className="text-emerald-400 font-bold text-xl mb-1">Live</div>
-                    <div className="text-slate-400 text-xs">Sync Enabled</div>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1">
-                    <div className="text-blue-400 font-bold text-xl mb-1">Secure</div>
-                    <div className="text-slate-400 text-xs">Role Access</div>
-                </div>
-                </div>
-            </div>
 
-            <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 space-y-6 transform hover:scale-[1.01] transition-transform duration-300">
-                <h2 className="text-2xl font-bold text-slate-800 mb-6">Enter Portal</h2>
-                
-                <button onClick={() => handleRoleClick('ADMIN')} className="w-full p-4 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition flex items-center gap-4 group shadow-lg shadow-slate-200">
-                <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors"><LayoutDashboard className="w-6 h-6 text-blue-400" /></div>
-                <div className="text-left">
-                    <div className="font-bold text-lg">Admin Dashboard</div>
-                    <div className="text-xs text-slate-400">Master Control & Analytics</div>
-                </div>
-                </button>
-                
-                <div className="space-y-3 pt-2">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Staff Access</p>
-                {[
-                    { id: 'FG_STORE', label: 'Finished Goods', icon: Package, color: 'emerald' },
-                    { id: 'SFG_STORE', label: 'Semi-Finished Store', icon: Truck, color: 'amber' },
-                    { id: 'WIP_FLOOR', label: 'Production Floor (WIP)', icon: Hammer, color: 'rose' },
-                ].map((role) => (
-                    <button key={role.id} onClick={() => handleRoleClick(role.id)} className={`w-full flex items-center gap-4 p-4 border rounded-xl transition-all hover:shadow-md group bg-white hover:border-${role.color}-200 border-slate-100`}>
-                    <div className={`p-2 rounded-lg bg-${role.color}-50 text-${role.color}-600`}>
-                        <role.icon className="w-5 h-5" />
-                    </div>
-                    <span className="font-bold text-slate-700 group-hover:text-slate-900">{role.label}</span>
-                    <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ArrowLeft className="w-4 h-4 rotate-180 text-slate-300" />
-                    </div>
+                <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 transform lg:hover:scale-[1.01] transition-transform duration-300 mx-auto w-full max-w-md lg:max-w-lg">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        Let's Pack the Comfort <ChevronRight className="w-5 h-5 text-slate-400" />
+                    </h2>
+                    
+                    <button onClick={() => handleRoleClick('ADMIN')} className="w-full p-4 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition flex items-center gap-4 group shadow-lg shadow-slate-200">
+                        <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors shrink-0"><LayoutDashboard className="w-6 h-6 text-blue-400" /></div>
+                        <div className="text-left">
+                            <div className="font-bold text-lg">Admin Dashboard</div>
+                            <div className="text-xs text-slate-400">Master Control & Analytics</div>
+                        </div>
                     </button>
-                ))}
+                    
+                    <div className="space-y-3 pt-2">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Store Staff Access</p>
+                        {[
+                            { id: 'FG_STORE', label: 'Finished Goods', icon: Package, color: 'emerald' },
+                            { id: 'SFG_STORE', label: 'Semi-Finished Store', icon: Truck, color: 'amber' },
+                            { id: 'WIP_FLOOR', label: 'Production Floor (WIP)', icon: Hammer, color: 'rose' },
+                        ].map((role) => (
+                            <button key={role.id} onClick={() => handleRoleClick(role.id)} className={`w-full flex items-center gap-4 p-4 border rounded-xl transition-all hover:shadow-md group bg-white hover:border-${role.color}-200 border-slate-100`}>
+                                <div className={`p-2 rounded-lg bg-${role.color}-50 text-${role.color}-600 shrink-0`}>
+                                    <role.icon className="w-5 h-5" />
+                                </div>
+                                <span className="font-bold text-slate-700 group-hover:text-slate-900">{role.label}</span>
+                                <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ArrowLeft className="w-4 h-4 rotate-180 text-slate-300" />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
                 </div>
-            </div>
             </div>
         </div>
     );
@@ -343,7 +344,6 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const scanInputRef = useRef(null);
 
   useEffect(() => {
-    // If no db, just return
     if (!db) return;
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -489,14 +489,13 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     });
   }, [currentViewOrders, selectedMasterSku, scanQuery, manualMode]);
 
-  const totalUnits = orders.filter(o => o.status === 'PENDING').reduce((sum, order) => sum + (order.quantity || 0), 0);
   const styles = role === 'FG_STORE' ? { bg: 'bg-emerald-600', btn: 'text-emerald-600 border-emerald-100' } : role === 'SFG_STORE' ? { bg: 'bg-amber-600', btn: 'text-amber-600 border-amber-100' } : { bg: 'bg-rose-600', btn: 'text-rose-600 border-rose-100' };
 
   if (role === 'FG_STORE' && !selectedPortal) {
     return (
       <div className="min-h-screen bg-slate-50 pb-20">
         <div className={`${styles.bg} text-white p-4 shadow-lg sticky top-0 z-10`}>
-          <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div className="w-full max-w-[2400px] mx-auto px-4 flex justify-between items-center">
             <div>
                 <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-6 h-6" />{getRoleTitle()}</h2>
                 <p className="text-emerald-100 text-sm opacity-90">Welcome, {loggedInUser ? loggedInUser.name : 'Staff'}</p>
@@ -504,7 +503,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30"><LogOut className="w-5 h-5" /></button>
           </div>
         </div>
-        <div className="max-w-5xl mx-auto p-4 mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="w-full max-w-[2400px] mx-auto p-4 mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {Object.values(portalGroups).length === 0 && !loading && (
              <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
           )}
@@ -524,53 +523,57 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     <div className={`min-h-screen bg-slate-50 pb-20`}>
       <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} />
       
+      {/* HEADER */}
       <div className={`${styles.bg} text-white p-4 shadow-lg sticky top-0 z-20`}>
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <div>
+        <div className="w-full max-w-[2400px] mx-auto px-2 flex justify-between items-center">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              {role === 'FG_STORE' && selectedPortal && <button onClick={() => setSelectedPortal(null)} className="p-1 -ml-2 mr-1 hover:bg-white/20 rounded-full"><ArrowLeft className="w-6 h-6" /></button>}
-              <h2 className="text-xl font-bold">{role === 'FG_STORE' ? selectedPortal : getRoleTitle()}</h2>
+              {role === 'FG_STORE' && selectedPortal && <button onClick={() => setSelectedPortal(null)} className="p-1 -ml-2 mr-1 hover:bg-white/20 rounded-full shrink-0"><ArrowLeft className="w-6 h-6" /></button>}
+              <h2 className="text-lg sm:text-xl font-bold truncate">{role === 'FG_STORE' ? selectedPortal : getRoleTitle()}</h2>
             </div>
-            <div className="flex gap-3 text-sm opacity-90">
-                <span className="font-semibold">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
+            <div className="flex gap-2 text-xs sm:text-sm opacity-90 truncate mt-0.5">
+                <span className="font-semibold truncate">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
                 <span className="opacity-60">|</span>
-                <span>{displayOrders.filter(o => o.status === 'PENDING').length} Tasks</span>
+                <span className="truncate">{displayOrders.filter(o => o.status === 'PENDING').length} Tasks</span>
             </div>
           </div>
-          <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30"><LogOut className="w-5 h-5" /></button>
+          <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 shrink-0 ml-2"><LogOut className="w-5 h-5" /></button>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-4 space-y-4 mt-4">
-        <div className="bg-white p-3 rounded-xl shadow-md border-2 border-slate-300 flex items-center gap-2 sticky top-24 z-10 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
-            <button onClick={toggleInputMode} className={`p-3 rounded-lg transition ${manualMode ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
-                {manualMode ? <Keyboard className="w-6 h-6" /> : <ScanBarcode className="w-6 h-6" />}
+      <div className="w-full max-w-[2400px] mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 mt-2">
+        {/* Sticky Search Bar */}
+        <div className="sticky top-[72px] z-10 bg-white p-2 sm:p-3 rounded-xl shadow-md border-2 border-slate-300 flex items-center gap-2 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
+            <button onClick={toggleInputMode} className={`p-2 sm:p-3 rounded-lg transition ${manualMode ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
+                {manualMode ? <Keyboard className="w-5 h-5 sm:w-6 sm:h-6" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6" />}
             </button>
-            <div className="flex-1 flex items-center bg-slate-50 rounded-lg border border-slate-200 px-3 h-12">
-                <div className="mr-2">{manualMode ? <Search className="w-6 h-6 text-slate-400" /> : <ScanBarcode className="w-6 h-6 text-blue-500 animate-pulse" />}</div>
-                <input ref={scanInputRef} type="text" placeholder={manualMode ? "Type to search..." : "Scan Barcode..."} className="flex-1 bg-transparent outline-none font-mono text-lg text-slate-800 font-bold" value={scanQuery} onChange={(e) => setScanQuery(e.target.value)} onKeyDown={handleScanKey} autoFocus autoComplete="off" />
+            <div className="flex-1 flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 sm:px-3 h-10 sm:h-12">
+                <div className="mr-2">{manualMode ? <Search className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 animate-pulse" />}</div>
+                <input ref={scanInputRef} type="text" placeholder={manualMode ? "Search..." : "Scan..."} className="flex-1 bg-transparent outline-none font-mono text-base sm:text-lg text-slate-800 font-bold w-full" value={scanQuery} onChange={(e) => setScanQuery(e.target.value)} onKeyDown={handleScanKey} autoFocus autoComplete="off" />
                 {scanQuery && <button onClick={() => setScanQuery('')} className="p-1 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>}
             </div>
         </div>
 
+        {/* Sticky Master SKU Filter */}
         {Object.keys(masterSkuStats).length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide snap-x">
-             <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-5 py-3 rounded-xl font-bold text-sm border-2 transition-all ${!selectedMasterSku ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
-                All Items
+          <div className="sticky top-[135px] sm:top-[145px] z-10 bg-slate-50/95 backdrop-blur py-2 -mx-2 px-2 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x touch-pan-x">
+             <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all ${!selectedMasterSku ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                All
              </button>
              {Object.entries(masterSkuStats).map(([master, qty]) => (
-                 <button key={master} onClick={() => setSelectedMasterSku(selectedMasterSku === master ? null : master)} className={`snap-start flex-shrink-0 px-4 py-2 rounded-xl font-bold text-sm border-2 flex flex-col items-center justify-center min-w-[80px] transition-all ${selectedMasterSku === master ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-200'}`}>
-                    <span className="text-xs uppercase opacity-70">SKU</span>
-                    <span className="text-lg leading-none mb-1">{master}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] ${selectedMasterSku === master ? 'bg-blue-200 text-blue-800' : 'bg-slate-100 text-slate-500'}`}>{qty} Units</span>
+                 <button key={master} onClick={() => setSelectedMasterSku(selectedMasterSku === master ? null : master)} className={`snap-start flex-shrink-0 px-3 py-2 sm:px-4 sm:py-2 rounded-xl font-bold text-sm border-2 flex flex-col items-center justify-center min-w-[70px] sm:min-w-[80px] transition-all ${selectedMasterSku === master ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-200'}`}>
+                    <span className="text-[10px] uppercase opacity-70">SKU</span>
+                    <span className="text-sm sm:text-base leading-none mb-0.5">{master}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${selectedMasterSku === master ? 'bg-blue-200 text-blue-800' : 'bg-slate-100 text-slate-500'}`}>{qty}</span>
                  </button>
              ))}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 divide-y divide-slate-100 overflow-hidden min-h-[200px]">
+        {/* Responsive Grid Tasks (100% width on mobile) */}
+        <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-24" : "pb-24"}>
             {displayOrders.length === 0 && (
-                <div className="p-8 text-center text-slate-400 flex flex-col items-center">
+                <div className="col-span-full p-8 text-center text-slate-400 flex flex-col items-center bg-white rounded-xl border border-dashed border-slate-300">
                     <CheckCircle2 className="w-12 h-12 mb-2 opacity-20" />
                     <p>No tasks found for this filter</p>
                 </div>
@@ -578,17 +581,30 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             {displayOrders.map(order => {
               const isCompleted = order.status === 'COMPLETED';
               return (
-                <div key={order.id} className={`p-4 flex items-center justify-between transition ${isCompleted ? 'bg-emerald-50/50 opacity-60' : 'hover:bg-slate-50'}`}>
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="flex items-center gap-2 mb-1">
-                       <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isCompleted ? 'COMPLETED' : (order.portal || 'Standard')}</span>
-                       <span className="text-[10px] text-slate-400 font-medium">{getMasterSku(order.sku)}</span>
+                <div key={order.id} className={`p-4 rounded-xl border shadow-sm transition-all duration-200 flex flex-col justify-between h-full ${isCompleted ? 'bg-emerald-50/50 border-emerald-100 opacity-60' : 'bg-white border-slate-200 hover:shadow-md hover:border-blue-300'}`}>
+                  
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1 min-w-0 pr-2">
+                       <div className="flex items-center gap-2 mb-1">
+                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isCompleted ? 'COMPLETED' : (order.portal || 'Standard')}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{getMasterSku(order.sku)}</span>
+                       </div>
+                       <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
                     </div>
-                    <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
+                    {isCompleted && <CheckCheck className="w-6 h-6 text-emerald-500" />}
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right"><span className={`block text-2xl font-bold leading-none ${isCompleted ? 'text-emerald-600' : 'text-slate-800'}`}>{order.quantity}</span><span className="text-[10px] text-slate-400 uppercase">Units</span></div>
-                    {isCompleted ? <div className="p-3"><CheckCheck className="w-8 h-8 text-emerald-500" /></div> : <button onClick={() => initiateMarkOut(order)} className={`p-3 rounded-xl border-2 transition active:scale-95 flex items-center justify-center ${styles.btn} hover:bg-current hover:text-white`}><CheckCircle2 className="w-8 h-8" /></button>}
+
+                  <div className="flex items-end justify-between pt-2 border-t border-slate-50 mt-auto">
+                    <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Quantity</span>
+                        <div className={`text-2xl font-bold leading-none ${isCompleted ? 'text-emerald-600' : 'text-slate-800'}`}>{order.quantity}</div>
+                    </div>
+                    
+                    {!isCompleted && (
+                        <button onClick={() => initiateMarkOut(order)} className={`px-4 py-3 sm:py-2 rounded-lg font-bold text-sm transition active:scale-95 flex items-center gap-2 ${styles.btn} border bg-white hover:bg-slate-50 shadow-sm`}>
+                            Pick Item <ArrowLeft className="w-4 h-4 rotate-180" />
+                        </button>
+                    )}
                   </div>
                 </div>
               );
@@ -697,7 +713,7 @@ const SettingsView = () => {
                         <div className="p-8 text-center text-slate-400">No staff members added yet.</div>
                     )}
                     {staff.map(user => (
-                        <div key={user.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+                        <div key={user.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition gap-4">
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-lg ${
                                     user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' :
@@ -711,7 +727,7 @@ const SettingsView = () => {
                                     <div className="text-xs font-mono text-slate-400">Pass: {user.password}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
                                 <span className="text-xs font-bold uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">
                                     {user.role === 'FG_STORE' ? 'Finished Goods' : user.role === 'SFG_STORE' ? 'Semi-Finished' : 'WIP Floor'}
                                 </span>
@@ -785,23 +801,23 @@ const ReportsView = ({ allOrders, stats }) => {
        {/* Export Card */}
        <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
           <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
-              {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
+             {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
           </div>
           <div>
-              <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
-              <p className="text-slate-500 mt-2 max-w-md mx-auto">
-                 {isLocked 
-                   ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
-                   : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
-              </p>
+             <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
+             <p className="text-slate-500 mt-2 max-w-md mx-auto">
+                {isLocked 
+                  ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
+                  : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
+             </p>
           </div>
           <button 
             onClick={handleExport}
             disabled={isLocked}
             className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}
           >
-              <FileSpreadsheet className="w-5 h-5" />
-              Download Excel Report
+             <FileSpreadsheet className="w-5 h-5" />
+             Download Excel Report
           </button>
        </div>
 
@@ -816,7 +832,7 @@ const ReportsView = ({ allOrders, stats }) => {
                    <div key={portal} className="flex items-center gap-3">
                       <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
                       <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div>
+                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div>
                       </div>
                       <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
                    </div>
@@ -833,9 +849,9 @@ const ReportsView = ({ allOrders, stats }) => {
                 <table className="w-full text-sm text-left">
                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
                       <tr>
-                          <th className="px-4 py-3">User</th>
-                          <th className="px-4 py-3 text-right">Lines</th>
-                          <th className="px-4 py-3 text-right">Units</th>
+                         <th className="px-4 py-3">User</th>
+                         <th className="px-4 py-3 text-right">Lines</th>
+                         <th className="px-4 py-3 text-right">Units</th>
                       </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100">
@@ -1033,8 +1049,8 @@ const AdminDashboard = ({ user, logout }) => {
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 text-slate-900">
       
       {/* Modern Header */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-3 md:px-6 md:py-4 flex flex-col md:flex-row items-center justify-between shadow-sm gap-4 transition-all duration-300">
-         <div className="w-full md:w-auto flex items-center justify-between md:justify-start gap-6">
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
+         <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
              <div className="flex items-center gap-3">
                <div className="p-2 bg-slate-900 rounded-lg"><LayoutDashboard className="w-5 h-5 text-white" /></div>
                <div>
@@ -1043,36 +1059,56 @@ const AdminDashboard = ({ user, logout }) => {
                </div>
              </div>
              
-             {/* Mobile-only menu toggle could go here, but we'll stack for now */}
+             {/* Navigation Tabs (Hidden on small mobile, showed in scroll on slightly larger) */}
+             <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
+                <button 
+                  onClick={() => setView('DASHBOARD')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Dashboard
+                </button>
+                <button 
+                  onClick={() => setView('REPORTS')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <BarChart3 className="w-4 h-4" /> <span className="hidden md:inline">Reports</span>
+                </button>
+                <button 
+                  onClick={() => setView('SETTINGS')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Settings className="w-4 h-4" /> <span className="hidden md:inline">Settings</span>
+                </button>
+             </div>
          </div>
 
-         {/* Navigation Tabs - Scrollable on mobile */}
-         <div className="w-full md:w-auto overflow-x-auto flex bg-slate-100 p-1 rounded-xl no-scrollbar">
+         {/* Mobile Navigation Tabs (Visible only on small screens) */}
+         <div className="flex sm:hidden w-full bg-slate-100 p-1 rounded-xl mb-3 overflow-x-auto justify-between">
             <button 
-              onClick={() => setView('DASHBOARD')}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setView('DASHBOARD')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'DASHBOARD' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
             >
-              Dashboard
+                Dashboard
             </button>
             <button 
-              onClick={() => setView('REPORTS')}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setView('REPORTS')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'REPORTS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
             >
-              <BarChart3 className="w-4 h-4" /> Reports
+                Reports
             </button>
             <button 
-              onClick={() => setView('SETTINGS')}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setView('SETTINGS')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'SETTINGS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
             >
-              <Settings className="w-4 h-4" /> Settings
+                Settings
             </button>
          </div>
 
-         <div className="w-full md:w-auto flex items-center justify-end gap-4">
+         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             {view === 'DASHBOARD' && (
-              <button onClick={() => document.getElementById('file-upload').click()} className="flex items-center gap-2 text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
+              <button onClick={() => document.getElementById('file-upload').click()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
                   <Upload className="w-4 h-4" />
-                  <span>Upload</span>
+                  <span>Upload Excel</span>
               </button>
             )}
             <button onClick={logout} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-red-500">
@@ -1082,10 +1118,10 @@ const AdminDashboard = ({ user, logout }) => {
          <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+      <main className="w-full max-w-[2400px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
         {/* Left Column: Metrics & Controls */}
-        <div className="lg:col-span-2 space-y-6 md:space-y-8">
+        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
             
             {view === 'REPORTS' ? (
                <ReportsView allOrders={allOrders} stats={stats} />
@@ -1097,29 +1133,29 @@ const AdminDashboard = ({ user, logout }) => {
                 {isUploading && (
                     <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-center gap-3 text-blue-700 animate-pulse">
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        <span className="font-bold">Processing...</span>
+                        <span className="font-bold">Processing Order File... This may take a moment.</span>
                     </div>
                 )}
                 
                 {fileName && !isUploading && (
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
-                        <div className="flex items-center gap-4">
+                    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center gap-4 w-full sm:w-auto">
                             <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600"><FileSpreadsheet className="w-6 h-6" /></div>
-                            <div>
-                                <p className="font-bold text-slate-800">{fileName}</p>
-                                <p className="text-xs text-slate-500 font-medium">{columnMap ? 'Headers Detected' : 'Columns not identified'}</p>
+                            <div className="min-w-0">
+                                <p className="font-bold text-slate-800 truncate">{fileName}</p>
+                                <p className="text-xs text-slate-500 font-medium">{columnMap ? 'Headers Detected Successfully' : 'Columns not identified'}</p>
                             </div>
                         </div>
                         <button onClick={handleProcessUpload} className="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-200">
                             <CheckCircle2 className="w-5 h-5" />
-                            Go Live
+                            Process & Go Live
                         </button>
                     </div>
                 )}
 
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group">
+                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group min-h-[140px]">
                         <div className="relative z-10">
                             <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Load</p>
                             <p className="text-4xl font-bold mt-2">{grandTotal}</p>
@@ -1194,17 +1230,17 @@ const AdminDashboard = ({ user, logout }) => {
                         <Globe className="w-5 h-5 text-blue-500" />
                         Portal Pending (Live)
                     </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         {Object.entries(portalStats).filter(([k]) => k !== 'grandTotal').map(([portal, count]) => (
-                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors">
+                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors text-center sm:text-left">
                                 <div className="text-xs font-bold uppercase text-slate-500 mb-1">{portal}</div>
-                                <div className="text-2xl font-bold text-slate-800">{count}</div>
+                                <div className="text-xl sm:text-2xl font-bold text-slate-800">{count}</div>
                             </div>
                         ))}
                     </div>
                 </div>
                 
-                <div className="flex justify-end pt-4 pb-20 lg:pb-0">
+                <div className="flex justify-end pt-4">
                     <button onClick={handleClearAll} className="flex items-center gap-2 text-red-500 font-bold text-xs hover:bg-red-50 px-4 py-2 rounded-lg transition">
                         <AlertCircle className="w-4 h-4" /> Reset System Data
                     </button>
@@ -1213,9 +1249,9 @@ const AdminDashboard = ({ user, logout }) => {
             )}
         </div>
 
-        {/* Right Column: Live Feed */}
+        {/* Right Column: Live Feed (Desktop) / Bottom Feed (Mobile) */}
         <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-[400px] lg:h-[calc(100vh-8rem)] sticky top-0 lg:top-24">
+             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24">
                  <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
                          <Activity className="w-4 h-4 text-emerald-500" /> Live Activity
@@ -1276,11 +1312,13 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
+      // START FIX: Removed custom token logic to prevent ReferenceError and Mismatch Error
+      try {
         await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Auth failed:", error);
       }
+      // END FIX
     };
     initAuth();
     return onAuthStateChanged(auth, setUser);
