@@ -28,7 +28,7 @@ import {
   ScanBarcode, Keyboard, CheckCheck, Loader2,
   Activity, Clock, Upload, FileSpreadsheet,
   TrendingUp, Users, AlertCircle, BarChart3,
-  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock, RefreshCw
+  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock, RefreshCw, FileDown
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
@@ -259,13 +259,241 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   );
 };
 
-// --- SETTINGS VIEW ---
+const SkuMappingModal = ({ isOpen, onClose }) => {
+    const [password, setPassword] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [error, setError] = useState('');
+    const [uploading, setUploading] = useState(false);
+    const [file, setFile] = useState(null);
+    const [mappingStats, setMappingStats] = useState(null);
+    const [history, setHistory] = useState([]);
+    const [activeTab, setActiveTab] = useState('UPLOAD'); 
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'), orderBy('uploadedAt', 'desc'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubscribe();
+    }, [isAuthenticated]);
+
+    const handleLogin = (e) => {
+        e.preventDefault();
+        if (password === 'HV@2026') {
+            setIsAuthenticated(true);
+            setError('');
+        } else {
+            setError('Incorrect Password');
+        }
+    };
+
+    const handleFile = (e) => {
+        setFile(e.target.files[0]);
+        setError('');
+        setMappingStats(null);
+    };
+
+    const processMappingFile = async () => {
+        if (!file) return;
+        setUploading(true);
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const rawData = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
+                
+                const batch = writeBatch(db);
+                let count = 0;
+                
+                rawData.forEach(row => {
+                    const keys = Object.keys(row);
+                    const masterKey = keys.find(k => k.toLowerCase().includes('master'));
+                    const fgKey = keys.find(k => k.toLowerCase().includes('fg') && k.toLowerCase().includes('sku'));
+                    const sfgKey = keys.find(k => k.toLowerCase().includes('sf') && k.toLowerCase().includes('sku'));
+
+                    if (masterKey) {
+                        const masterSku = String(row[masterKey]).trim();
+                        
+                        if (fgKey && row[fgKey]) {
+                            const fgCode = String(row[fgKey]).trim().toUpperCase();
+                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', fgCode);
+                            batch.set(ref, { masterSku: masterSku, type: 'FG' });
+                            count++;
+                        }
+
+                        if (sfgKey && row[sfgKey]) {
+                            const sfgCode = String(row[sfgKey]).trim().toUpperCase();
+                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', sfgCode);
+                            batch.set(ref, { masterSku: masterSku, type: 'SFG' });
+                            count++;
+                        }
+                    }
+                });
+
+                // Save to history
+                const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
+                batch.set(historyRef, {
+                    fileName: file.name,
+                    uploadedAt: serverTimestamp(),
+                    uploadedBy: 'Admin',
+                    rowCount: rawData.length,
+                    rawData: JSON.stringify(rawData) // Storing stringified JSON to reconstruct later
+                });
+
+                await batch.commit();
+                setMappingStats(count);
+                setFile(null);
+            } catch (err) {
+                console.error(err);
+                setError('Failed to process file. Ensure standard headers or file size under limit.');
+            } finally {
+                setUploading(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleClearMappings = async () => {
+        if (!confirm("Are you sure you want to delete ALL existing SKU mappings? This cannot be undone and will break scanning for mapped items.")) return;
+        setUploading(true);
+        try {
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
+            const snapshot = await getDocs(q);
+            const batch = writeBatch(db);
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            alert("All mappings cleared successfully.");
+        } catch(e) {
+            console.error(e);
+            alert("Error clearing mappings.");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const deleteHistoryItem = async (id) => {
+         if (!confirm("Delete this history record?")) return;
+         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history', id));
+    };
+
+    const downloadHistoryItem = (item) => {
+        try {
+            const data = JSON.parse(item.rawData);
+            const ws = window.XLSX.utils.json_to_sheet(data);
+            const wb = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(wb, ws, "Mapping");
+            window.XLSX.writeFile(wb, item.fileName || 'mapping_backup.xlsx');
+        } catch (e) {
+            alert("Error downloading file: Data may be corrupted.");
+        }
+    };
+
+    const downloadSampleTemplate = () => {
+        const wsData = [
+            { "Master SKU": "ALL004_36", "FG SKU": "FG000079", "SFG SKU": "SF001130" },
+            { "Master SKU": "ALL005_42", "FG SKU": "FG000080", "SFG SKU": "SF001131" }
+        ];
+        const ws = window.XLSX.utils.json_to_sheet(wsData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Template");
+        window.XLSX.writeFile(wb, "SKU_Mapping_Template.xlsx");
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+                <div className="flex justify-between items-center mb-6 flex-none">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Link className="w-5 h-5 text-indigo-500" /> SKU Mapping
+                    </h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+
+                {!isAuthenticated ? (
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <p className="text-sm text-slate-500">Enter Admin password to manage SKU links.</p>
+                        <input 
+                            type="password" 
+                            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="Password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            autoFocus
+                        />
+                        {error && <p className="text-red-500 text-sm">{error}</p>}
+                        <button className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock</button>
+                    </form>
+                ) : (
+                    <div className="flex flex-col h-full overflow-hidden">
+                        <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
+                            <button onClick={() => setActiveTab('UPLOAD')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>New Upload</button>
+                            <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Upload History</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto min-h-0">
+                            {activeTab === 'UPLOAD' ? (
+                                <div className="space-y-6 pt-2">
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <p className="font-bold">How this works:</p>
+                                            <button onClick={downloadSampleTemplate} className="text-xs bg-white border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50 flex items-center gap-1 text-indigo-600 font-bold">
+                                                <FileDown className="w-3 h-3" /> Template
+                                            </button>
+                                        </div>
+                                        <p>Upload an Excel with columns for <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>.</p>
+                                        <p className="mt-2 text-xs opacity-75">Tip: Use "Clear All Mappings" below before uploading a completely new set if you want to remove old codes.</p>
+                                    </div>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-slate-50">
+                                        <input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" />
+                                        <label htmlFor="mapping-upload" className="cursor-pointer block">
+                                            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                                            <span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload Mapping Excel"}</span>
+                                        </label>
+                                    </div>
+                                    {mappingStats !== null && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">Successfully mapped {mappingStats} codes!</div>}
+                                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                                    <div className="flex gap-3">
+                                        <button onClick={handleClearMappings} className="px-4 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 flex-none border border-red-200" title="Delete ALL SKU mappings to start fresh"><Trash2 className="w-5 h-5" /></button>
+                                        <button onClick={processMappingFile} disabled={!file || uploading} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                                            {uploading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Update Database'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 pt-2">
+                                    {history.length === 0 && <div className="text-center text-slate-400 py-8 italic">No upload history found.</div>}
+                                    {history.map((item) => (
+                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition flex justify-between items-center group">
+                                            <div className="min-w-0 pr-4">
+                                                <div className="flex items-center gap-2 mb-1"><FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" /><span className="font-bold text-slate-700 truncate text-sm">{item.fileName}</span></div>
+                                                <div className="text-xs text-slate-400 flex items-center gap-2"><Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}</div>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => downloadHistoryItem(item)} className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition" title="Download Original File"><Download className="w-4 h-4" /></button>
+                                                <button onClick={() => deleteHistoryItem(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete History Record"><Trash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const SettingsView = () => {
     const [staff, setStaff] = useState([]);
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState('FG_STORE');
     const [newPassword, setNewPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [mappingModalOpen, setMappingModalOpen] = useState(false);
 
     useEffect(() => {
         if (!db) return;
@@ -303,8 +531,31 @@ const SettingsView = () => {
     };
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-6">
+        <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
+            <SkuMappingModal isOpen={mappingModalOpen} onClose={() => setMappingModalOpen(false)} />
+
+            {/* System Configuration Card - Moved SKU Map Button Here */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-indigo-500" /> System Configuration
+                </h3>
+                <div className="flex flex-wrap gap-4">
+                     <button 
+                        onClick={() => setMappingModalOpen(true)}
+                        className="flex items-center gap-3 px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition group text-left"
+                     >
+                        <div className="p-2 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                            <Link className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700">SKU Mapping</div>
+                            <div className="text-xs text-slate-500">Manage Master/FG/SFG Links</div>
+                        </div>
+                     </button>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                     <Plus className="w-5 h-5 text-blue-500" /> Add New Staff
                 </h3>
@@ -388,7 +639,6 @@ const SettingsView = () => {
     );
 };
 
-// --- REPORTS VIEW ---
 const ReportsView = ({ allOrders, stats }) => {
   const pendingTasks = stats.fg + stats.sfg + stats.wip;
   const isLocked = pendingTasks > 0;
@@ -427,6 +677,7 @@ const ReportsView = ({ allOrders, stats }) => {
     return Object.entries(dist).sort((a,b) => b[1] - a[1]);
   }, [allOrders]);
 
+  // Aggregate user performance
   const userPerformance = useMemo(() => {
     const perf = {};
     allOrders.forEach(o => {
@@ -441,6 +692,8 @@ const ReportsView = ({ allOrders, stats }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+       
+       {/* Export Card */}
        <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
           <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
              {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
@@ -464,6 +717,7 @@ const ReportsView = ({ allOrders, stats }) => {
        </div>
 
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Portal Chart */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
              <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution
@@ -481,6 +735,7 @@ const ReportsView = ({ allOrders, stats }) => {
              </div>
           </div>
 
+          {/* Activity Log / Leaderboard */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
              <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance
@@ -514,7 +769,7 @@ const ReportsView = ({ allOrders, stats }) => {
   );
 };
 
-// --- STATS VIEW ---
+// ... StatsView (kept unchanged) ...
 const StatsView = () => {
     const [history, setHistory] = useState([]);
     const [filter, setFilter] = useState(7); // Default to 7 days
@@ -673,217 +928,6 @@ const StatsView = () => {
                 </div>
             </div>
 
-        </div>
-    );
-};
-
-const SkuMappingModal = ({ isOpen, onClose }) => {
-    const [password, setPassword] = useState('');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [error, setError] = useState('');
-    const [uploading, setUploading] = useState(false);
-    const [file, setFile] = useState(null);
-    const [mappingStats, setMappingStats] = useState(null);
-    const [history, setHistory] = useState([]);
-    const [activeTab, setActiveTab] = useState('UPLOAD'); 
-
-    useEffect(() => {
-        if (!isAuthenticated) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'), orderBy('uploadedAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        return () => unsubscribe();
-    }, [isAuthenticated]);
-
-    const handleLogin = (e) => {
-        e.preventDefault();
-        if (password === 'HV@2026') {
-            setIsAuthenticated(true);
-            setError('');
-        } else {
-            setError('Incorrect Password');
-        }
-    };
-
-    const handleFile = (e) => {
-        setFile(e.target.files[0]);
-        setError('');
-        setMappingStats(null);
-    };
-
-    const processMappingFile = async () => {
-        if (!file) return;
-        setUploading(true);
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                const rawData = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
-                
-                const batch = writeBatch(db);
-                let count = 0;
-                
-                rawData.forEach(row => {
-                    const keys = Object.keys(row);
-                    const masterKey = keys.find(k => k.toLowerCase().includes('master'));
-                    const fgKey = keys.find(k => k.toLowerCase().includes('fg') && k.toLowerCase().includes('sku'));
-                    const sfgKey = keys.find(k => k.toLowerCase().includes('sf') && k.toLowerCase().includes('sku'));
-
-                    if (masterKey) {
-                        const masterSku = String(row[masterKey]).trim();
-                        
-                        if (fgKey && row[fgKey]) {
-                            const fgCode = String(row[fgKey]).trim().toUpperCase();
-                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', fgCode);
-                            batch.set(ref, { masterSku: masterSku, type: 'FG' });
-                            count++;
-                        }
-
-                        if (sfgKey && row[sfgKey]) {
-                            const sfgCode = String(row[sfgKey]).trim().toUpperCase();
-                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', sfgCode);
-                            batch.set(ref, { masterSku: masterSku, type: 'SFG' });
-                            count++;
-                        }
-                    }
-                });
-
-                // Save to history
-                const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
-                batch.set(historyRef, {
-                    fileName: file.name,
-                    uploadedAt: serverTimestamp(),
-                    uploadedBy: 'Admin',
-                    rowCount: rawData.length,
-                    rawData: JSON.stringify(rawData) // Storing stringified JSON to reconstruct later
-                });
-
-                await batch.commit();
-                setMappingStats(count);
-                setFile(null);
-            } catch (err) {
-                console.error(err);
-                setError('Failed to process file. Ensure standard headers or file size under limit.');
-            } finally {
-                setUploading(false);
-            }
-        };
-        reader.readAsBinaryString(file);
-    };
-
-    const handleClearMappings = async () => {
-        if (!confirm("Are you sure you want to delete ALL existing SKU mappings? This cannot be undone.")) return;
-        setUploading(true);
-        try {
-            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
-            const snapshot = await getDocs(q);
-            const batch = writeBatch(db);
-            snapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref);
-            });
-            await batch.commit();
-            alert("All mappings cleared.");
-        } catch(e) {
-            console.error(e);
-            alert("Error clearing mappings.");
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const deleteHistoryItem = async (id) => {
-         if (!confirm("Delete this history record?")) return;
-         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history', id));
-    };
-
-    const downloadHistoryItem = (item) => {
-        try {
-            const data = JSON.parse(item.rawData);
-            const ws = window.XLSX.utils.json_to_sheet(data);
-            const wb = window.XLSX.utils.book_new();
-            window.XLSX.utils.book_append_sheet(wb, ws, "Mapping");
-            window.XLSX.writeFile(wb, item.fileName || 'mapping_backup.xlsx');
-        } catch (e) {
-            alert("Error downloading file: Data may be corrupted.");
-        }
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
-                <div className="flex justify-between items-center mb-6 flex-none">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <Link className="w-5 h-5 text-indigo-500" /> SKU Mapping
-                    </h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
-                </div>
-
-                {!isAuthenticated ? (
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <p className="text-sm text-slate-500">Enter Admin password to manage SKU links.</p>
-                        <input 
-                            type="password" 
-                            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            autoFocus
-                        />
-                        {error && <p className="text-red-500 text-sm">{error}</p>}
-                        <button className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock</button>
-                    </form>
-                ) : (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
-                            <button onClick={() => setActiveTab('UPLOAD')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>New Upload</button>
-                            <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Upload History</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto min-h-0">
-                            {activeTab === 'UPLOAD' ? (
-                                <div className="space-y-6 pt-2">
-                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
-                                        <p className="font-bold mb-1">How this works:</p>
-                                        <p>Upload an Excel with columns for <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>.</p>
-                                    </div>
-                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-slate-50">
-                                        <input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" />
-                                        <label htmlFor="mapping-upload" className="cursor-pointer block">
-                                            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
-                                            <span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload Mapping Excel"}</span>
-                                        </label>
-                                    </div>
-                                    {mappingStats !== null && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">Successfully mapped {mappingStats} codes!</div>}
-                                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-                                    <div className="flex gap-3">
-                                        <button onClick={handleClearMappings} className="px-4 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 flex-none" title="Clear all mappings"><Trash2 className="w-5 h-5" /></button>
-                                        <button onClick={processMappingFile} disabled={!file || uploading} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
-                                            {uploading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Update Database'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-3 pt-2">
-                                    {history.length === 0 && <div className="text-center text-slate-400 py-8 italic">No upload history found.</div>}
-                                    {history.map((item) => (
-                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition flex justify-between items-center group">
-                                            <div className="min-w-0 pr-4">
-                                                <div className="flex items-center gap-2 mb-1"><FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" /><span className="font-bold text-slate-700 truncate text-sm">{item.fileName}</span></div>
-                                                <div className="text-xs text-slate-400 flex items-center gap-2"><Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}</div>
-                                            </div>
-                                            <div className="flex gap-1">
-                                                <button onClick={() => downloadHistoryItem(item)} className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition" title="Download Original File"><Download className="w-4 h-4" /></button>
-                                                <button onClick={() => deleteHistoryItem(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
         </div>
     );
 };
@@ -1452,7 +1496,7 @@ const AdminDashboard = ({ user, logout }) => {
       
       {/* Modern Header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
-         <div className="flex items-center gap-6">
+         <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
              <div className="flex items-center gap-3">
                <div className="p-2 bg-slate-900 rounded-lg"><LayoutDashboard className="w-5 h-5 text-white" /></div>
                <div>
@@ -1462,31 +1506,65 @@ const AdminDashboard = ({ user, logout }) => {
              </div>
              
              {/* Navigation Tabs */}
-             <div className="flex bg-slate-100 p-1 rounded-xl">
+             <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
                 <button 
                   onClick={() => setView('DASHBOARD')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Dashboard
                 </button>
                 <button 
                   onClick={() => setView('REPORTS')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <BarChart3 className="w-4 h-4" /> Reports
+                  <FileSpreadsheet className="w-4 h-4" /> <span className="hidden md:inline">Reports</span>
+                </button>
+                <button 
+                  onClick={() => setView('STATS')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'STATS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <BarChart3 className="w-4 h-4" /> <span className="hidden md:inline">Stats</span>
                 </button>
                 <button 
                   onClick={() => setView('SETTINGS')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <Settings className="w-4 h-4" /> Settings
+                  <Settings className="w-4 h-4" /> <span className="hidden md:inline">Settings</span>
                 </button>
              </div>
          </div>
 
-         <div className="flex items-center gap-4">
+         {/* Mobile Navigation Tabs */}
+         <div className="flex sm:hidden w-full bg-slate-100 p-1 rounded-xl mb-3 overflow-x-auto justify-between">
+            <button 
+                onClick={() => setView('DASHBOARD')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'DASHBOARD' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            >
+                Dash
+            </button>
+            <button 
+                onClick={() => setView('REPORTS')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'REPORTS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            >
+                Reports
+            </button>
+            <button 
+                onClick={() => setView('STATS')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'STATS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            >
+                Stats
+            </button>
+            <button 
+                onClick={() => setView('SETTINGS')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'SETTINGS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            >
+                Settings
+            </button>
+         </div>
+
+         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             {view === 'DASHBOARD' && (
-              <button onClick={() => document.getElementById('file-upload').click()} className="flex items-center gap-2 text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
+              <button onClick={() => document.getElementById('file-upload').click()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
                   <Upload className="w-4 h-4" />
                   <span>Upload Excel</span>
               </button>
@@ -1498,13 +1576,15 @@ const AdminDashboard = ({ user, logout }) => {
          <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="w-full max-w-[2400px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
         {/* Left Column: Metrics & Controls */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
             
             {view === 'REPORTS' ? (
                <ReportsView allOrders={allOrders} stats={stats} />
+            ) : view === 'STATS' ? (
+               <StatsView />
             ) : view === 'SETTINGS' ? (
                <SettingsView />
             ) : (
@@ -1518,11 +1598,11 @@ const AdminDashboard = ({ user, logout }) => {
                 )}
                 
                 {fileName && !isUploading && (
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
-                        <div className="flex items-center gap-4">
+                    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center gap-4 w-full sm:w-auto">
                             <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600"><FileSpreadsheet className="w-6 h-6" /></div>
-                            <div>
-                                <p className="font-bold text-slate-800">{fileName}</p>
+                            <div className="min-w-0">
+                                <p className="font-bold text-slate-800 truncate">{fileName}</p>
                                 <p className="text-xs text-slate-500 font-medium">{columnMap ? 'Headers Detected Successfully' : 'Columns not identified'}</p>
                             </div>
                         </div>
@@ -1534,8 +1614,8 @@ const AdminDashboard = ({ user, logout }) => {
                 )}
 
                 {/* Metrics Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group min-h-[140px]">
                         <div className="relative z-10">
                             <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Load</p>
                             <p className="text-4xl font-bold mt-2">{grandTotal}</p>
@@ -1592,7 +1672,7 @@ const AdminDashboard = ({ user, logout }) => {
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow md:col-span-2">
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow sm:col-span-2">
                         <div className="flex items-center gap-2 mb-1">
                             <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><TrendingUp className="w-4 h-4" /></div>
                             <span className="font-bold text-slate-700 text-sm">Total Throughput</span>
@@ -1612,9 +1692,9 @@ const AdminDashboard = ({ user, logout }) => {
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         {Object.entries(portalStats).filter(([k]) => k !== 'grandTotal').map(([portal, count]) => (
-                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors">
+                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors text-center sm:text-left">
                                 <div className="text-xs font-bold uppercase text-slate-500 mb-1">{portal}</div>
-                                <div className="text-2xl font-bold text-slate-800">{count}</div>
+                                <div className="text-xl sm:text-2xl font-bold text-slate-800">{count}</div>
                             </div>
                         ))}
                     </div>
@@ -1629,9 +1709,9 @@ const AdminDashboard = ({ user, logout }) => {
             )}
         </div>
 
-        {/* Right Column: Live Feed */}
+        {/* Right Column: Live Feed (Desktop) / Bottom Feed (Mobile) */}
         <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-[calc(100vh-8rem)] sticky top-24">
+             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24">
                  <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
                          <Activity className="w-4 h-4 text-emerald-500" /> Live Activity
@@ -1686,8 +1766,12 @@ const AdminDashboard = ({ user, logout }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
-  const [loggedInUser, setLoggedInUser] = useState(null);
+  // Initialize state from localStorage if available
+  const [role, setRole] = useState(() => localStorage.getItem('hv_app_role') || null);
+  const [loggedInUser, setLoggedInUser] = useState(() => {
+    const saved = localStorage.getItem('hv_app_user');
+    return saved ? JSON.parse(saved) : null;
+  });
 
   useEffect(() => {
     if (!auth) return;
@@ -1707,11 +1791,15 @@ export default function App() {
   const handleRoleSelection = (selectedRole, userObj) => {
       setRole(selectedRole);
       setLoggedInUser(userObj || null);
+      localStorage.setItem('hv_app_role', selectedRole);
+      if (userObj) localStorage.setItem('hv_app_user', JSON.stringify(userObj));
   };
 
   const handleLogout = () => {
       setRole(null);
       setLoggedInUser(null);
+      localStorage.removeItem('hv_app_role');
+      localStorage.removeItem('hv_app_user');
   };
 
   if (!auth) return <div className="h-screen flex items-center justify-center text-red-500">Firebase Config Error</div>;
