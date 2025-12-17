@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
+// Your specific configuration is now hardcoded here
 const firebaseConfig = {
   apiKey: "AIzaSyAF8i2DtMi7qLjtjEgDqH7cz01hFMxwUu0",
   authDomain: "hvglobalwarehouse.firebaseapp.com",
@@ -44,6 +45,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// This ID separates your data in the database. 
+// Don't change this if you want to keep your history.
 const appId = "hv-global-warehouse-ops-v1"; 
 
 // --- UTILITIES ---
@@ -147,6 +150,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   useEffect(() => {
     if (isOpen && role !== 'ADMIN') {
         setLoading(true);
+        // Fetch users for this role
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
         getDocs(q).then(snap => {
             const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -211,7 +215,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
                     {loading ? (
                         <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /> Loading Staff...</div>
                     ) : users.length === 0 ? (
-                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4 text-sm">
+                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4">
                             No staff found for this role. <br/>Please ask Admin to add you in Settings.
                         </div>
                     ) : (
@@ -621,8 +625,8 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   );
 };
 
+// ... SettingsView (kept unchanged for brevity as it was correct) ...
 const SettingsView = () => {
-    // ... existing SettingsView code (same as before)
     const [staff, setStaff] = useState([]);
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState('FG_STORE');
@@ -720,7 +724,7 @@ const SettingsView = () => {
                         <div className="p-8 text-center text-slate-400">No staff members added yet.</div>
                     )}
                     {staff.map(user => (
-                        <div key={user.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition gap-4">
+                        <div key={user.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-lg ${
                                     user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' :
@@ -734,7 +738,7 @@ const SettingsView = () => {
                                     <div className="text-xs font-mono text-slate-400">Pass: {user.password}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                            <div className="flex items-center gap-4">
                                 <span className="text-xs font-bold uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">
                                     {user.role === 'FG_STORE' ? 'Finished Goods' : user.role === 'SFG_STORE' ? 'Semi-Finished' : 'WIP Floor'}
                                 </span>
@@ -750,6 +754,138 @@ const SettingsView = () => {
     );
 };
 
+const ReportsView = ({ allOrders, stats }) => {
+  const pendingTasks = stats.fg + stats.sfg + stats.wip;
+  const isLocked = pendingTasks > 0;
+  
+  const handleExport = () => {
+    if (isLocked) {
+      alert(`Cannot export report. ${pendingTasks} tasks are still pending.`);
+      return;
+    }
+    
+    // Create Worksheet
+    const wsData = allOrders.map(order => ({
+      'SKU': order.sku,
+      'Master SKU': getMasterSku(order.sku),
+      'Category': order.category,
+      'Quantity': order.quantity,
+      'Status': order.status,
+      'Portal': order.portal || 'N/A',
+      'Picked By': order.pickedBy || 'N/A',
+      'Time Picked': order.pickedAt ? formatTime(order.pickedAt) : '',
+      'Date': new Date().toLocaleDateString()
+    }));
+
+    const ws = window.XLSX.utils.json_to_sheet(wsData);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
+    window.XLSX.writeFile(wb, `Warehouse_Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const portalDistribution = useMemo(() => {
+    const dist = {};
+    allOrders.forEach(o => {
+      if (o.category === 'FG_STORE' && o.portal) {
+        dist[o.portal] = (dist[o.portal] || 0) + o.quantity;
+      }
+    });
+    return Object.entries(dist).sort((a,b) => b[1] - a[1]);
+  }, [allOrders]);
+
+  // Aggregate user performance
+  const userPerformance = useMemo(() => {
+    const perf = {};
+    allOrders.forEach(o => {
+        if (o.status === 'COMPLETED' && o.pickedBy) {
+            if (!perf[o.pickedBy]) perf[o.pickedBy] = { lines: 0, units: 0 };
+            perf[o.pickedBy].lines += 1;
+            perf[o.pickedBy].units += (o.quantity || 0);
+        }
+    });
+    return Object.entries(perf).sort((a,b) => b[1].units - a[1].units);
+  }, [allOrders]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+       
+       {/* Export Card */}
+       <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
+          <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
+             {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
+          </div>
+          <div>
+             <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
+             <p className="text-slate-500 mt-2 max-w-md mx-auto">
+                {isLocked 
+                  ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
+                  : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
+             </p>
+          </div>
+          <button 
+            onClick={handleExport}
+            disabled={isLocked}
+            className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}
+          >
+             <FileSpreadsheet className="w-5 h-5" />
+             Download Excel Report
+          </button>
+       </div>
+
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Portal Chart */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution
+             </h4>
+             <div className="space-y-3">
+                {portalDistribution.map(([portal, qty]) => (
+                   <div key={portal} className="flex items-center gap-3">
+                      <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div>
+                      </div>
+                      <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
+                   </div>
+                ))}
+             </div>
+          </div>
+
+          {/* Activity Log / Leaderboard */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance
+             </h4>
+             <div className="overflow-hidden rounded-lg border border-slate-100">
+                <table className="w-full text-sm text-left">
+                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
+                      <tr>
+                         <th className="px-4 py-3">User</th>
+                         <th className="px-4 py-3 text-right">Lines</th>
+                         <th className="px-4 py-3 text-right">Units</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {userPerformance.length === 0 && (
+                          <tr><td colSpan="3" className="px-4 py-4 text-center text-slate-400 italic">No activity yet</td></tr>
+                      )}
+                      {userPerformance.map(([user, data]) => (
+                        <tr key={user} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-medium text-slate-700">{user}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{data.lines}</td>
+                            <td className="px-4 py-3 text-right font-bold text-blue-600">{data.units}</td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+};
+
+// ... AdminDashboard (same as before) ...
 const AdminDashboard = ({ user, logout }) => {
   const [view, setView] = useState('DASHBOARD'); // 'DASHBOARD' | 'REPORTS' | 'SETTINGS'
   const [stats, setStats] = useState({ fg: 0, sfg: 0, wip: 0, totalFgDay: 0, totalSfgDay: 0, totalWipDay: 0, completedUnits: 0 });
@@ -922,10 +1058,10 @@ const AdminDashboard = ({ user, logout }) => {
   const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
 
   return (
-    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden">
+    <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 text-slate-900">
       
-      {/* Modern Header - Fixed */}
-      <header className="flex-none sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
+      {/* Modern Header */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
          <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
              <div className="flex items-center gap-3">
                <div className="p-2 bg-slate-900 rounded-lg"><LayoutDashboard className="w-5 h-5 text-white" /></div>
@@ -935,7 +1071,7 @@ const AdminDashboard = ({ user, logout }) => {
                </div>
              </div>
              
-             {/* Navigation Tabs (Hidden on small mobile, showed in scroll on slightly larger) */}
+             {/* Navigation Tabs */}
              <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
                 <button 
                   onClick={() => setView('DASHBOARD')}
@@ -958,7 +1094,7 @@ const AdminDashboard = ({ user, logout }) => {
              </div>
          </div>
 
-         {/* Mobile Navigation Tabs (Visible only on small screens) */}
+         {/* Mobile Navigation Tabs */}
          <div className="flex sm:hidden w-full bg-slate-100 p-1 rounded-xl mb-3 overflow-x-auto justify-between">
             <button 
                 onClick={() => setView('DASHBOARD')}
@@ -994,7 +1130,7 @@ const AdminDashboard = ({ user, logout }) => {
          <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
       </header>
 
-      <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+      <main className="w-full max-w-[2400px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
         {/* Left Column: Metrics & Controls */}
         <div className="lg:col-span-2 space-y-6 sm:space-y-8">
@@ -1127,7 +1263,7 @@ const AdminDashboard = ({ user, logout }) => {
 
         {/* Right Column: Live Feed (Desktop) / Bottom Feed (Mobile) */}
         <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-6">
+             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24">
                  <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
                          <Activity className="w-4 h-4 text-emerald-500" /> Live Activity
@@ -1182,8 +1318,12 @@ const AdminDashboard = ({ user, logout }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
-  const [loggedInUser, setLoggedInUser] = useState(null);
+  // Initialize state from localStorage if available
+  const [role, setRole] = useState(() => localStorage.getItem('hv_app_role') || null);
+  const [loggedInUser, setLoggedInUser] = useState(() => {
+    const saved = localStorage.getItem('hv_app_user');
+    return saved ? JSON.parse(saved) : null;
+  });
 
   useEffect(() => {
     if (!auth) return;
@@ -1203,11 +1343,15 @@ export default function App() {
   const handleRoleSelection = (selectedRole, userObj) => {
       setRole(selectedRole);
       setLoggedInUser(userObj || null);
+      localStorage.setItem('hv_app_role', selectedRole);
+      if (userObj) localStorage.setItem('hv_app_user', JSON.stringify(userObj));
   };
 
   const handleLogout = () => {
       setRole(null);
       setLoggedInUser(null);
+      localStorage.removeItem('hv_app_role');
+      localStorage.removeItem('hv_app_user');
   };
 
   if (!auth) return <div className="h-screen flex items-center justify-center text-red-500">Firebase Config Error</div>;
