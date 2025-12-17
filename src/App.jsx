@@ -18,7 +18,8 @@ import {
   getDocs,
   writeBatch,
   setDoc,
-  where
+  where,
+  orderBy
 } from "firebase/firestore";
 import { 
   Package, Truck, Hammer, LogOut, CheckCircle2, 
@@ -27,7 +28,7 @@ import {
   ScanBarcode, Keyboard, CheckCheck, Loader2,
   Activity, Clock, Upload, FileSpreadsheet,
   TrendingUp, Users, AlertCircle, BarChart3,
-  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu
+  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
@@ -64,6 +65,12 @@ const formatTime = (timestamp) => {
   if (!timestamp) return '';
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatDate = (timestamp) => {
+  if (!timestamp) return '';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 // --- COMPONENTS ---
@@ -147,6 +154,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   useEffect(() => {
     if (isOpen && role !== 'ADMIN') {
         setLoading(true);
+        // Fetch users for this role
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
         getDocs(q).then(snap => {
             const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -211,7 +219,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
                     {loading ? (
                         <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /> Loading Staff...</div>
                     ) : users.length === 0 ? (
-                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4 text-sm">
+                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4">
                             No staff found for this role. <br/>Please ask Admin to add you in Settings.
                         </div>
                     ) : (
@@ -249,6 +257,224 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
         </div>
     </div>
   );
+};
+
+const SkuMappingModal = ({ isOpen, onClose }) => {
+    const [password, setPassword] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [error, setError] = useState('');
+    const [uploading, setUploading] = useState(false);
+    const [file, setFile] = useState(null);
+    const [mappingStats, setMappingStats] = useState(null);
+    const [history, setHistory] = useState([]);
+    const [activeTab, setActiveTab] = useState('UPLOAD'); // 'UPLOAD' | 'HISTORY'
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'), orderBy('uploadedAt', 'desc'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubscribe();
+    }, [isAuthenticated]);
+
+    const handleLogin = (e) => {
+        e.preventDefault();
+        if (password === 'HV@2026') {
+            setIsAuthenticated(true);
+            setError('');
+        } else {
+            setError('Incorrect Password');
+        }
+    };
+
+    const handleFile = (e) => {
+        setFile(e.target.files[0]);
+        setError('');
+        setMappingStats(null);
+    };
+
+    const processMappingFile = async () => {
+        if (!file) return;
+        setUploading(true);
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const rawData = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
+                
+                const batch = writeBatch(db);
+                let count = 0;
+                
+                rawData.forEach(row => {
+                    const keys = Object.keys(row);
+                    const masterKey = keys.find(k => k.toLowerCase().includes('master'));
+                    const fgKey = keys.find(k => k.toLowerCase().includes('fg') && k.toLowerCase().includes('sku'));
+                    const sfgKey = keys.find(k => k.toLowerCase().includes('sf') && k.toLowerCase().includes('sku'));
+
+                    if (masterKey) {
+                        const masterSku = String(row[masterKey]).trim();
+                        
+                        if (fgKey && row[fgKey]) {
+                            const fgCode = String(row[fgKey]).trim().toUpperCase();
+                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', fgCode);
+                            batch.set(ref, { masterSku: masterSku, type: 'FG' });
+                            count++;
+                        }
+
+                        if (sfgKey && row[sfgKey]) {
+                            const sfgCode = String(row[sfgKey]).trim().toUpperCase();
+                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', sfgCode);
+                            batch.set(ref, { masterSku: masterSku, type: 'SFG' });
+                            count++;
+                        }
+                    }
+                });
+
+                // Save to history
+                // Note: Storing full raw data to allow re-download. Firestore limit 1MB/doc. 
+                // If files are huge, this might error, but assuming SKU lists are manageable.
+                const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
+                batch.set(historyRef, {
+                    fileName: file.name,
+                    uploadedAt: serverTimestamp(),
+                    uploadedBy: 'Admin',
+                    rowCount: rawData.length,
+                    rawData: JSON.stringify(rawData) // Storing stringified JSON to reconstruct later
+                });
+
+                await batch.commit();
+                setMappingStats(count);
+                setFile(null);
+            } catch (err) {
+                console.error(err);
+                setError('Failed to process file. Ensure standard headers or file size under limit.');
+            } finally {
+                setUploading(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const downloadHistoryItem = (item) => {
+        try {
+            const data = JSON.parse(item.rawData);
+            const ws = window.XLSX.utils.json_to_sheet(data);
+            const wb = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(wb, ws, "Mapping");
+            window.XLSX.writeFile(wb, item.fileName || 'mapping_backup.xlsx');
+        } catch (e) {
+            alert("Error downloading file: Data may be corrupted.");
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+                <div className="flex justify-between items-center mb-6 flex-none">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Link className="w-5 h-5 text-indigo-500" /> SKU Mapping
+                    </h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+
+                {!isAuthenticated ? (
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <p className="text-sm text-slate-500">Enter Admin password to manage SKU links.</p>
+                        <input 
+                            type="password" 
+                            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="Password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            autoFocus
+                        />
+                        {error && <p className="text-red-500 text-sm">{error}</p>}
+                        <button className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock</button>
+                    </form>
+                ) : (
+                    <div className="flex flex-col h-full overflow-hidden">
+                        <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
+                            <button 
+                                onClick={() => setActiveTab('UPLOAD')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                New Upload
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('HISTORY')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Upload History
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto min-h-0">
+                            {activeTab === 'UPLOAD' ? (
+                                <div className="space-y-6 pt-2">
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
+                                        <p className="font-bold mb-1">How this works:</p>
+                                        <p>Upload an Excel with columns for <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>. The system will link them so staff can scan any code.</p>
+                                    </div>
+
+                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-slate-50">
+                                        <input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" />
+                                        <label htmlFor="mapping-upload" className="cursor-pointer block">
+                                            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                                            <span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload Mapping Excel"}</span>
+                                        </label>
+                                    </div>
+
+                                    {mappingStats !== null && (
+                                        <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">
+                                            Successfully mapped {mappingStats} codes!
+                                        </div>
+                                    )}
+
+                                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+
+                                    <button 
+                                        onClick={processMappingFile}
+                                        disabled={!file || uploading}
+                                        className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                                    >
+                                        {uploading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Update Database'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 pt-2">
+                                    {history.length === 0 && (
+                                        <div className="text-center text-slate-400 py-8 italic">No upload history found.</div>
+                                    )}
+                                    {history.map((item) => (
+                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition flex justify-between items-center group">
+                                            <div className="min-w-0 pr-4">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
+                                                    <span className="font-bold text-slate-700 truncate text-sm">{item.fileName}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-400 flex items-center gap-2">
+                                                    <Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => downloadHistoryItem(item)}
+                                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
+                                                title="Download Original File"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 };
 
 const RoleSelection = ({ onSelectRole }) => {
@@ -341,7 +567,21 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const [targetOrder, setTargetOrder] = useState(null);
   const [scanQuery, setScanQuery] = useState('');
   const [manualMode, setManualMode] = useState(false);
+  const [skuMappings, setSkuMappings] = useState({});
   const scanInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+        const mapping = {};
+        snap.docs.forEach(d => {
+            mapping[d.id] = d.data().masterSku;
+        });
+        setSkuMappings(mapping);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!db) return;
@@ -386,11 +626,13 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   };
 
   const processScan = (code) => {
-    const scannedSku = code.trim().toUpperCase();
+    let scannedSku = code.trim().toUpperCase();
     if (!scannedSku) return;
+    if (skuMappings[scannedSku]) {
+        scannedSku = skuMappings[scannedSku]; 
+    }
     const relevantList = (role === 'FG_STORE' && selectedPortal) ? orders.filter(o => (o.portal || 'General') === selectedPortal) : orders;
     const matchedOrder = relevantList.find(o => o.sku.trim().toUpperCase() === scannedSku && o.status === 'PENDING');
-
     if (matchedOrder) {
         initiateMarkOut(matchedOrder);
         setScanQuery('');
@@ -414,11 +656,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const completeOrder = async (orderId) => {
       try {
         const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
-        await updateDoc(orderRef, { 
-            status: 'COMPLETED', 
-            pickedBy: loggedInUser ? loggedInUser.name : 'Staff', 
-            pickedAt: serverTimestamp() 
-        });
+        await updateDoc(orderRef, { status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
         setScanQuery('');
       } catch (error) { console.error("Error:", error); }
   };
@@ -428,17 +666,9 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
           const batch = writeBatch(db);
           const originalRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id);
           batch.update(originalRef, { quantity: originalOrder.quantity - pickedQty });
-          
           const newOrderRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-          const completedOrder = { 
-              ...originalOrder, 
-              quantity: pickedQty, 
-              status: 'COMPLETED', 
-              pickedBy: loggedInUser ? loggedInUser.name : 'Staff', 
-              pickedAt: serverTimestamp() 
-          };
+          const completedOrder = { ...originalOrder, quantity: pickedQty, status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() };
           delete completedOrder.id;
-          
           batch.set(newOrderRef, completedOrder);
           await batch.commit();
       } catch (error) { console.error("Error:", error); }
@@ -883,9 +1113,170 @@ const ReportsView = ({ allOrders, stats }) => {
   );
 };
 
-// ... AdminDashboard (same as before) ...
+const StatsView = () => {
+    const [history, setHistory] = useState([]);
+    const [filter, setFilter] = useState(7); // Default to 7 days
+
+    useEffect(() => {
+        if (!db) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sort by date ascending
+            data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            setHistory(data);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const filteredHistory = useMemo(() => {
+        if (filter === 'ALL') return history;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - filter);
+        return history.filter(item => new Date(item.date) >= cutoff);
+    }, [history, filter]);
+
+    const aggregate = useMemo(() => {
+        return filteredHistory.reduce((acc, curr) => ({
+            total: acc.total + (curr.total || 0),
+            units: acc.units + (curr.units || 0),
+            fg: acc.fg + (curr.fg || 0),
+            sfg: acc.sfg + (curr.sfg || 0),
+            wip: acc.wip + (curr.wip || 0),
+            completed: acc.completed + (curr.completed || 0),
+        }), { total: 0, units: 0, fg: 0, sfg: 0, wip: 0, completed: 0 });
+    }, [filteredHistory]);
+
+    const handleExportHistory = () => {
+        const wsData = filteredHistory.map(h => ({
+            'Date': h.day,
+            'Total Lines': h.total,
+            'Total Units': h.units,
+            'FG Lines': h.fg,
+            'SFG Lines': h.sfg,
+            'WIP Lines': h.wip,
+            'Completed Lines': h.completed,
+            'Completion Rate': h.total ? Math.round((h.completed/h.total)*100)+'%' : '0%'
+        }));
+
+        const ws = window.XLSX.utils.json_to_sheet(wsData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "History");
+        window.XLSX.writeFile(wb, `Warehouse_History_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            
+            {/* Controls */}
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4">
+                <div className="flex gap-2">
+                    {[7, 30, 'ALL'].map((f) => (
+                        <button 
+                            key={f} 
+                            onClick={() => setFilter(f)}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                        >
+                            {f === 'ALL' ? 'All Time' : `Last ${f} Days`}
+                        </button>
+                    ))}
+                </div>
+                <button 
+                    onClick={handleExportHistory}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold hover:bg-emerald-200 transition"
+                >
+                    <Download className="w-4 h-4" /> Export History
+                </button>
+            </div>
+
+            {/* Big Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Total Units Processed</p>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{aggregate.units.toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Completion Rate</p>
+                    <p className="text-3xl font-bold text-emerald-600 mt-1">
+                        {aggregate.total ? Math.round((aggregate.completed / aggregate.total) * 100) : 0}%
+                    </p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Total Orders</p>
+                    <p className="text-3xl font-bold text-blue-600 mt-1">{aggregate.total.toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Avg Daily Units</p>
+                    <p className="text-3xl font-bold text-purple-600 mt-1">
+                        {filteredHistory.length ? Math.round(aggregate.units / filteredHistory.length) : 0}
+                    </p>
+                </div>
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Category Split (Pie-like visual) */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <PieChart className="w-5 h-5 text-indigo-500" /> Category Split
+                    </h3>
+                    <div className="space-y-4">
+                        {[
+                            { label: 'Finished Goods', val: aggregate.fg, color: 'bg-emerald-500' },
+                            { label: 'Semi-Finished', val: aggregate.sfg, color: 'bg-amber-500' },
+                            { label: 'WIP Floor', val: aggregate.wip, color: 'bg-rose-500' },
+                        ].map((cat) => (
+                            <div key={cat.label}>
+                                <div className="flex justify-between text-sm font-medium text-slate-600 mb-1">
+                                    <span>{cat.label}</span>
+                                    <span>{Math.round((cat.val / (aggregate.total || 1)) * 100)}%</span>
+                                </div>
+                                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${cat.color}`} style={{ width: `${(cat.val / (aggregate.total || 1)) * 100}%` }}></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Daily Trend (Bar Chart Visual) */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-blue-500" /> Daily Output Trend
+                    </h3>
+                    <div className="flex items-end justify-between gap-2 h-40 mt-8">
+                        {filteredHistory.slice(-14).map((h, i) => {
+                            const max = Math.max(...filteredHistory.map(x => x.units), 100);
+                            const height = Math.max((h.units / max) * 100, 5);
+                            return (
+                                <div key={i} className="flex flex-col items-center flex-1 group relative">
+                                    <div 
+                                        className="w-full bg-blue-100 rounded-t-sm hover:bg-blue-200 transition-all relative"
+                                        style={{ height: `${height}%` }}
+                                    >
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {h.units}
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 mt-2 rotate-0 truncate w-full text-center">
+                                        {h.day.split('-')[2]}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        {filteredHistory.length === 0 && (
+                            <div className="w-full text-center text-slate-400 text-sm self-center">No history data available yet.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    );
+};
+
 const AdminDashboard = ({ user, logout }) => {
-  const [view, setView] = useState('DASHBOARD'); // 'DASHBOARD' | 'REPORTS' | 'SETTINGS'
+  const [view, setView] = useState('DASHBOARD'); // 'DASHBOARD' | 'REPORTS' | 'SETTINGS' | 'STATS'
   const [stats, setStats] = useState({ fg: 0, sfg: 0, wip: 0, totalFgDay: 0, totalSfgDay: 0, totalWipDay: 0, completedUnits: 0 });
   const [portalStats, setPortalStats] = useState({ grandTotal: 0 });
   const [recentCompleted, setRecentCompleted] = useState([]);
@@ -895,6 +1286,7 @@ const AdminDashboard = ({ user, logout }) => {
   const [parsedData, setParsedData] = useState([]);
   const [fileName, setFileName] = useState('');
   const [columnMap, setColumnMap] = useState(null); 
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -1044,20 +1436,56 @@ const AdminDashboard = ({ user, logout }) => {
   };
 
   const handleClearAll = async () => {
-    if(prompt("Type 'RESET' to delete all data") !== 'RESET') return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-    const snapshot = await getDocs(q);
-    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
-    await Promise.all(deletePromises);
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: 0 });
-    alert("Reset Complete");
+    const confirmation = prompt("Type 'RESET' to archive today's data and clear the dashboard for tomorrow.");
+    if (confirmation !== 'RESET') return;
+    
+    setIsUploading(true);
+    try {
+        // 1. Fetch current data
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+        const snapshot = await getDocs(q);
+        const orders = snapshot.docs.map(d => d.data());
+
+        // 2. Aggregate Stats
+        const stats = {
+            date: new Date().toISOString(),
+            total: orders.length,
+            fg: orders.filter(o => o.category === 'FG_STORE').length,
+            sfg: orders.filter(o => o.category === 'SFG_STORE').length,
+            wip: orders.filter(o => o.category === 'WIP_FLOOR').length,
+            completed: orders.filter(o => o.status === 'COMPLETED').length,
+            units: orders.reduce((acc, o) => acc + (parseInt(o.quantity) || 0), 0)
+        };
+
+        // 3. Save to History (Using timestamp ID to allow multiple resets per day without overwriting if needed, or stick to date to merge)
+        const timestampId = new Date().getTime().toString();
+        const todayStr = new Date().toISOString().split('T')[0];
+         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', timestampId), {
+            ...stats,
+            day: todayStr
+        });
+
+        // 4. Delete active orders
+        const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletePromises);
+        
+        // 5. Reset daily summary
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: 0 });
+        
+        alert("System Archived & Reset Successfully");
+    } catch (e) {
+        console.error(e);
+        alert("Error during reset");
+    } finally {
+        setIsUploading(false);
+    }
   };
 
   const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 text-slate-900">
-      
+      <SkuMappingModal isOpen={mappingModalOpen} onClose={() => setMappingModalOpen(false)} />
       {/* Modern Header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
          <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
@@ -1081,7 +1509,13 @@ const AdminDashboard = ({ user, logout }) => {
                   onClick={() => setView('REPORTS')}
                   className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <BarChart3 className="w-4 h-4" /> <span className="hidden md:inline">Reports</span>
+                  <FileSpreadsheet className="w-4 h-4" /> <span className="hidden md:inline">Reports</span>
+                </button>
+                <button 
+                  onClick={() => setView('STATS')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'STATS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <BarChart3 className="w-4 h-4" /> <span className="hidden md:inline">Stats</span>
                 </button>
                 <button 
                   onClick={() => setView('SETTINGS')}
@@ -1098,13 +1532,19 @@ const AdminDashboard = ({ user, logout }) => {
                 onClick={() => setView('DASHBOARD')}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'DASHBOARD' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
             >
-                Dashboard
+                Dash
             </button>
             <button 
                 onClick={() => setView('REPORTS')}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'REPORTS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
             >
                 Reports
+            </button>
+            <button 
+                onClick={() => setView('STATS')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'STATS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            >
+                Stats
             </button>
             <button 
                 onClick={() => setView('SETTINGS')}
@@ -1115,12 +1555,18 @@ const AdminDashboard = ({ user, logout }) => {
          </div>
 
          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {view === 'DASHBOARD' && (
-              <button onClick={() => document.getElementById('file-upload').click()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
-                  <Upload className="w-4 h-4" />
-                  <span>Upload Excel</span>
-              </button>
-            )}
+             {view === 'DASHBOARD' && (
+               <>
+               <button onClick={() => setMappingModalOpen(true)} className="flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95">
+                   <Link className="w-4 h-4" />
+                   <span className="hidden sm:inline">SKU Map</span>
+               </button>
+               <button onClick={() => document.getElementById('file-upload').click()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
+                   <Upload className="w-4 h-4" />
+                   <span>Upload Orders</span>
+               </button>
+               </>
+             )}
             <button onClick={logout} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-red-500">
                 <LogOut className="w-5 h-5" />
             </button>
@@ -1135,6 +1581,8 @@ const AdminDashboard = ({ user, logout }) => {
             
             {view === 'REPORTS' ? (
                <ReportsView allOrders={allOrders} stats={stats} />
+            ) : view === 'STATS' ? (
+               <StatsView />
             ) : view === 'SETTINGS' ? (
                <SettingsView />
             ) : (
