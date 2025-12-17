@@ -101,7 +101,7 @@ const PickModal = ({ isOpen, onClose, onConfirm, order }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[320px] sm:max-w-sm overflow-hidden transform transition-all scale-100">
         <div className="bg-slate-50 p-6 border-b border-slate-100 text-center">
           <h3 className="text-xl font-bold text-slate-800">Confirm Picking</h3>
@@ -264,7 +264,7 @@ const RoleSelection = ({ onSelectRole }) => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans overflow-y-auto">
+        <div className="min-h-screen h-[100dvh] bg-slate-900 flex items-center justify-center font-sans overflow-y-auto">
             <LoginModal 
                 isOpen={!!loginRole} 
                 onClose={() => setLoginRole(null)} 
@@ -272,7 +272,7 @@ const RoleSelection = ({ onSelectRole }) => {
                 onLoginSuccess={handleLoginSuccess}
             />
             
-            <div className="w-full max-w-[2000px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+            <div className="w-full max-w-[2000px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center p-6">
                 <div className="text-white space-y-6 lg:pl-12 text-center lg:text-left">
                     <div>
                         <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 leading-tight">
@@ -493,9 +493,9 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
   if (role === 'FG_STORE' && !selectedPortal) {
     return (
-      <div className="min-h-screen bg-slate-50 pb-20">
-        <div className={`${styles.bg} text-white p-4 shadow-lg sticky top-0 z-10`}>
-          <div className="w-full max-w-[2400px] mx-auto px-4 flex justify-between items-center">
+      <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden">
+        <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20`}>
+          <div className="w-full px-2 flex justify-between items-center">
             <div>
                 <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-6 h-6" />{getRoleTitle()}</h2>
                 <p className="text-emerald-100 text-sm opacity-90">Welcome, {loggedInUser ? loggedInUser.name : 'Staff'}</p>
@@ -503,29 +503,31 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30"><LogOut className="w-5 h-5" /></button>
           </div>
         </div>
-        <div className="w-full max-w-[2400px] mx-auto p-4 mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Object.values(portalGroups).length === 0 && !loading && (
-             <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
-          )}
-          {Object.values(portalGroups).map((group) => (
-            <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 group-hover:w-2 transition-all"></div>
-              <h3 className="text-lg font-bold text-slate-800 uppercase">{group.name}</h3>
-              <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800">{group.units}</span><span className="text-sm text-slate-500 font-medium">units</span></div>
-            </button>
-          ))}
+        <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Object.values(portalGroups).length === 0 && !loading && (
+                <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
+            )}
+            {Object.values(portalGroups).map((group) => (
+                <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 group-hover:w-2 transition-all"></div>
+                <h3 className="text-lg font-bold text-slate-800 uppercase">{group.name}</h3>
+                <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800">{group.units}</span><span className="text-sm text-slate-500 font-medium">units</span></div>
+                </button>
+            ))}
+            </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen bg-slate-50 pb-20`}>
+    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden">
       <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} />
       
-      {/* HEADER */}
-      <div className={`${styles.bg} text-white p-4 shadow-lg sticky top-0 z-20`}>
-        <div className="w-full max-w-[2400px] mx-auto px-2 flex justify-between items-center">
+      {/* HEADER - FIXED TOP */}
+      <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20`}>
+        <div className="w-full px-2 flex justify-between items-center">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               {role === 'FG_STORE' && selectedPortal && <button onClick={() => setSelectedPortal(null)} className="p-1 -ml-2 mr-1 hover:bg-white/20 rounded-full shrink-0"><ArrowLeft className="w-6 h-6" /></button>}
@@ -541,9 +543,10 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         </div>
       </div>
 
-      <div className="w-full max-w-[2400px] mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 mt-2">
-        {/* Sticky Search Bar */}
-        <div className="sticky top-[72px] z-10 bg-white p-2 sm:p-3 rounded-xl shadow-md border-2 border-slate-300 flex items-center gap-2 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
+      {/* FIXED CONTROLS SECTION */}
+      <div className="flex-none p-2 sm:p-4 pb-0 z-10 bg-slate-50">
+        {/* Search Bar */}
+        <div className="bg-white p-2 sm:p-3 rounded-xl shadow-md border-2 border-slate-300 flex items-center gap-2 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
             <button onClick={toggleInputMode} className={`p-2 sm:p-3 rounded-lg transition ${manualMode ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
                 {manualMode ? <Keyboard className="w-5 h-5 sm:w-6 sm:h-6" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6" />}
             </button>
@@ -554,9 +557,9 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             </div>
         </div>
 
-        {/* Sticky Master SKU Filter */}
+        {/* Master SKU Filter */}
         {Object.keys(masterSkuStats).length > 0 && (
-          <div className="sticky top-[135px] sm:top-[145px] z-10 bg-slate-50/95 backdrop-blur py-2 -mx-2 px-2 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x touch-pan-x">
+          <div className="flex gap-2 overflow-x-auto pb-2 pt-2 scrollbar-hide snap-x touch-pan-x">
              <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all ${!selectedMasterSku ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
                 All
              </button>
@@ -569,9 +572,12 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
              ))}
           </div>
         )}
+      </div>
 
+      {/* SCROLLABLE CONTENT AREA */}
+      <div className="flex-1 overflow-y-auto p-2 sm:p-4">
         {/* Responsive Grid Tasks (100% width on mobile) */}
-        <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-24" : "pb-24"}>
+        <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-12" : "pb-12"}>
             {displayOrders.length === 0 && (
                 <div className="col-span-full p-8 text-center text-slate-400 flex flex-col items-center bg-white rounded-xl border border-dashed border-slate-300">
                     <CheckCircle2 className="w-12 h-12 mb-2 opacity-20" />
@@ -616,6 +622,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 };
 
 const SettingsView = () => {
+    // ... existing SettingsView code (same as before)
     const [staff, setStaff] = useState([]);
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState('FG_STORE');
@@ -741,137 +748,6 @@ const SettingsView = () => {
             </div>
         </div>
     );
-};
-
-const ReportsView = ({ allOrders, stats }) => {
-  const pendingTasks = stats.fg + stats.sfg + stats.wip;
-  const isLocked = pendingTasks > 0;
-  
-  const handleExport = () => {
-    if (isLocked) {
-      alert(`Cannot export report. ${pendingTasks} tasks are still pending.`);
-      return;
-    }
-    
-    // Create Worksheet
-    const wsData = allOrders.map(order => ({
-      'SKU': order.sku,
-      'Master SKU': getMasterSku(order.sku),
-      'Category': order.category,
-      'Quantity': order.quantity,
-      'Status': order.status,
-      'Portal': order.portal || 'N/A',
-      'Picked By': order.pickedBy || 'N/A',
-      'Time Picked': order.pickedAt ? formatTime(order.pickedAt) : '',
-      'Date': new Date().toLocaleDateString()
-    }));
-
-    const ws = window.XLSX.utils.json_to_sheet(wsData);
-    const wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
-    window.XLSX.writeFile(wb, `Warehouse_Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const portalDistribution = useMemo(() => {
-    const dist = {};
-    allOrders.forEach(o => {
-      if (o.category === 'FG_STORE' && o.portal) {
-        dist[o.portal] = (dist[o.portal] || 0) + o.quantity;
-      }
-    });
-    return Object.entries(dist).sort((a,b) => b[1] - a[1]);
-  }, [allOrders]);
-
-  // Aggregate user performance
-  const userPerformance = useMemo(() => {
-    const perf = {};
-    allOrders.forEach(o => {
-        if (o.status === 'COMPLETED' && o.pickedBy) {
-            if (!perf[o.pickedBy]) perf[o.pickedBy] = { lines: 0, units: 0 };
-            perf[o.pickedBy].lines += 1;
-            perf[o.pickedBy].units += (o.quantity || 0);
-        }
-    });
-    return Object.entries(perf).sort((a,b) => b[1].units - a[1].units);
-  }, [allOrders]);
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-       
-       {/* Export Card */}
-       <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
-          <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
-             {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
-          </div>
-          <div>
-             <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
-             <p className="text-slate-500 mt-2 max-w-md mx-auto">
-                {isLocked 
-                  ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
-                  : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
-             </p>
-          </div>
-          <button 
-            onClick={handleExport}
-            disabled={isLocked}
-            className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}
-          >
-             <FileSpreadsheet className="w-5 h-5" />
-             Download Excel Report
-          </button>
-       </div>
-
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Portal Chart */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution
-             </h4>
-             <div className="space-y-3">
-                {portalDistribution.map(([portal, qty]) => (
-                   <div key={portal} className="flex items-center gap-3">
-                      <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
-                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div>
-                      </div>
-                      <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
-                   </div>
-                ))}
-             </div>
-          </div>
-
-          {/* Activity Log / Leaderboard */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance
-             </h4>
-             <div className="overflow-hidden rounded-lg border border-slate-100">
-                <table className="w-full text-sm text-left">
-                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
-                      <tr>
-                         <th className="px-4 py-3">User</th>
-                         <th className="px-4 py-3 text-right">Lines</th>
-                         <th className="px-4 py-3 text-right">Units</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                      {userPerformance.length === 0 && (
-                          <tr><td colSpan="3" className="px-4 py-4 text-center text-slate-400 italic">No activity yet</td></tr>
-                      )}
-                      {userPerformance.map(([user, data]) => (
-                        <tr key={user} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-medium text-slate-700">{user}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{data.lines}</td>
-                            <td className="px-4 py-3 text-right font-bold text-blue-600">{data.units}</td>
-                        </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-          </div>
-       </div>
-    </div>
-  );
 };
 
 const AdminDashboard = ({ user, logout }) => {
@@ -1046,10 +922,10 @@ const AdminDashboard = ({ user, logout }) => {
   const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 text-slate-900">
+    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden">
       
-      {/* Modern Header */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
+      {/* Modern Header - Fixed */}
+      <header className="flex-none sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
          <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
              <div className="flex items-center gap-3">
                <div className="p-2 bg-slate-900 rounded-lg"><LayoutDashboard className="w-5 h-5 text-white" /></div>
@@ -1118,7 +994,7 @@ const AdminDashboard = ({ user, logout }) => {
          <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
       </header>
 
-      <main className="w-full max-w-[2400px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+      <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
         {/* Left Column: Metrics & Controls */}
         <div className="lg:col-span-2 space-y-6 sm:space-y-8">
@@ -1251,7 +1127,7 @@ const AdminDashboard = ({ user, logout }) => {
 
         {/* Right Column: Live Feed (Desktop) / Bottom Feed (Mobile) */}
         <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24">
+             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-6">
                  <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
                          <Activity className="w-4 h-4 text-emerald-500" /> Live Activity
