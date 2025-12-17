@@ -268,7 +268,7 @@ const RoleSelection = ({ onSelectRole }) => {
     };
 
     return (
-        <div className="min-h-screen h-[100dvh] bg-slate-900 flex items-center justify-center font-sans overflow-y-auto">
+        <div className="min-h-screen h-[100dvh] bg-slate-900 flex items-center justify-center p-4 font-sans overflow-y-auto">
             <LoginModal 
                 isOpen={!!loginRole} 
                 onClose={() => setLoginRole(null)} 
@@ -526,11 +526,11 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   }
 
   return (
-    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden">
+    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full max-w-[100vw]">
       <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} />
       
       {/* HEADER - FIXED TOP */}
-      <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20`}>
+      <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20 w-full`}>
         <div className="w-full px-2 flex justify-between items-center">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -548,7 +548,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
       </div>
 
       {/* FIXED CONTROLS SECTION */}
-      <div className="flex-none p-2 sm:p-4 pb-0 z-10 bg-slate-50">
+      <div className="flex-none p-2 sm:p-4 pb-0 z-10 bg-slate-50 w-full max-w-full">
         {/* Search Bar */}
         <div className="bg-white p-2 sm:p-3 rounded-xl shadow-md border-2 border-slate-300 flex items-center gap-2 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
             <button onClick={toggleInputMode} className={`p-2 sm:p-3 rounded-lg transition ${manualMode ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
@@ -563,7 +563,8 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
         {/* Master SKU Filter */}
         {Object.keys(masterSkuStats).length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-2 pt-2 scrollbar-hide snap-x touch-pan-x">
+          <div className="w-full overflow-x-auto pb-2 pt-2 scrollbar-hide snap-x touch-pan-x">
+             <div className="flex gap-2 min-w-min">
              <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all ${!selectedMasterSku ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
                 All
              </button>
@@ -574,12 +575,13 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${selectedMasterSku === master ? 'bg-blue-200 text-blue-800' : 'bg-slate-100 text-slate-500'}`}>{qty}</span>
                  </button>
              ))}
+             </div>
           </div>
         )}
       </div>
 
       {/* SCROLLABLE CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+      <div className="flex-1 overflow-y-auto p-2 sm:p-4 w-full">
         {/* Responsive Grid Tasks (100% width on mobile) */}
         <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-12" : "pb-12"}>
             {displayOrders.length === 0 && (
@@ -724,7 +726,7 @@ const SettingsView = () => {
                         <div className="p-8 text-center text-slate-400">No staff members added yet.</div>
                     )}
                     {staff.map(user => (
-                        <div key={user.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+                        <div key={user.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition gap-4">
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-lg ${
                                     user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' :
@@ -738,7 +740,7 @@ const SettingsView = () => {
                                     <div className="text-xs font-mono text-slate-400">Pass: {user.password}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
                                 <span className="text-xs font-bold uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">
                                     {user.role === 'FG_STORE' ? 'Finished Goods' : user.role === 'SFG_STORE' ? 'Semi-Finished' : 'WIP Floor'}
                                 </span>
