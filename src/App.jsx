@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
-// Your specific configuration is now hardcoded here
 const firebaseConfig = {
   apiKey: "AIzaSyAF8i2DtMi7qLjtjEgDqH7cz01hFMxwUu0",
   authDomain: "hvglobalwarehouse.firebaseapp.com",
@@ -45,8 +44,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// This ID separates your data in the database. 
-// Don't change this if you want to keep your history.
 const appId = "hv-global-warehouse-ops-v1"; 
 
 // --- UTILITIES ---
@@ -150,7 +147,6 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   useEffect(() => {
     if (isOpen && role !== 'ADMIN') {
         setLoading(true);
-        // Fetch users for this role
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
         getDocs(q).then(snap => {
             const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -215,7 +211,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
                     {loading ? (
                         <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /> Loading Staff...</div>
                     ) : users.length === 0 ? (
-                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4">
+                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4 text-sm">
                             No staff found for this role. <br/>Please ask Admin to add you in Settings.
                         </div>
                     ) : (
@@ -497,7 +493,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
   if (role === 'FG_STORE' && !selectedPortal) {
     return (
-      <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden">
+      <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full">
         <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20`}>
           <div className="w-full px-2 flex justify-between items-center">
             <div>
@@ -507,13 +503,13 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30"><LogOut className="w-5 h-5" /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex-1 overflow-y-auto p-4 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
             {Object.values(portalGroups).length === 0 && !loading && (
                 <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
             )}
             {Object.values(portalGroups).map((group) => (
-                <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group">
+                <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group w-full">
                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 group-hover:w-2 transition-all"></div>
                 <h3 className="text-lg font-bold text-slate-800 uppercase">{group.name}</h3>
                 <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800">{group.units}</span><span className="text-sm text-slate-500 font-medium">units</span></div>
