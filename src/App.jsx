@@ -28,7 +28,7 @@ import {
   ScanBarcode, Keyboard, CheckCheck, Loader2,
   Activity, Clock, Upload, FileSpreadsheet,
   TrendingUp, Users, AlertCircle, BarChart3,
-  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock
+  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock, RefreshCw
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
@@ -259,601 +259,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   );
 };
 
-const SkuMappingModal = ({ isOpen, onClose }) => {
-    const [password, setPassword] = useState('');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [error, setError] = useState('');
-    const [uploading, setUploading] = useState(false);
-    const [file, setFile] = useState(null);
-    const [mappingStats, setMappingStats] = useState(null);
-    const [history, setHistory] = useState([]);
-    const [activeTab, setActiveTab] = useState('UPLOAD'); // 'UPLOAD' | 'HISTORY'
-
-    useEffect(() => {
-        if (!isAuthenticated) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'), orderBy('uploadedAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        return () => unsubscribe();
-    }, [isAuthenticated]);
-
-    const handleLogin = (e) => {
-        e.preventDefault();
-        if (password === 'HV@2026') {
-            setIsAuthenticated(true);
-            setError('');
-        } else {
-            setError('Incorrect Password');
-        }
-    };
-
-    const handleFile = (e) => {
-        setFile(e.target.files[0]);
-        setError('');
-        setMappingStats(null);
-    };
-
-    const processMappingFile = async () => {
-        if (!file) return;
-        setUploading(true);
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                const rawData = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
-                
-                const batch = writeBatch(db);
-                let count = 0;
-                
-                rawData.forEach(row => {
-                    const keys = Object.keys(row);
-                    const masterKey = keys.find(k => k.toLowerCase().includes('master'));
-                    const fgKey = keys.find(k => k.toLowerCase().includes('fg') && k.toLowerCase().includes('sku'));
-                    const sfgKey = keys.find(k => k.toLowerCase().includes('sf') && k.toLowerCase().includes('sku'));
-
-                    if (masterKey) {
-                        const masterSku = String(row[masterKey]).trim();
-                        
-                        if (fgKey && row[fgKey]) {
-                            const fgCode = String(row[fgKey]).trim().toUpperCase();
-                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', fgCode);
-                            batch.set(ref, { masterSku: masterSku, type: 'FG' });
-                            count++;
-                        }
-
-                        if (sfgKey && row[sfgKey]) {
-                            const sfgCode = String(row[sfgKey]).trim().toUpperCase();
-                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', sfgCode);
-                            batch.set(ref, { masterSku: masterSku, type: 'SFG' });
-                            count++;
-                        }
-                    }
-                });
-
-                // Save to history
-                // Note: Storing full raw data to allow re-download. Firestore limit 1MB/doc. 
-                // If files are huge, this might error, but assuming SKU lists are manageable.
-                const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
-                batch.set(historyRef, {
-                    fileName: file.name,
-                    uploadedAt: serverTimestamp(),
-                    uploadedBy: 'Admin',
-                    rowCount: rawData.length,
-                    rawData: JSON.stringify(rawData) // Storing stringified JSON to reconstruct later
-                });
-
-                await batch.commit();
-                setMappingStats(count);
-                setFile(null);
-            } catch (err) {
-                console.error(err);
-                setError('Failed to process file. Ensure standard headers or file size under limit.');
-            } finally {
-                setUploading(false);
-            }
-        };
-        reader.readAsBinaryString(file);
-    };
-
-    const downloadHistoryItem = (item) => {
-        try {
-            const data = JSON.parse(item.rawData);
-            const ws = window.XLSX.utils.json_to_sheet(data);
-            const wb = window.XLSX.utils.book_new();
-            window.XLSX.utils.book_append_sheet(wb, ws, "Mapping");
-            window.XLSX.writeFile(wb, item.fileName || 'mapping_backup.xlsx');
-        } catch (e) {
-            alert("Error downloading file: Data may be corrupted.");
-        }
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
-                <div className="flex justify-between items-center mb-6 flex-none">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <Link className="w-5 h-5 text-indigo-500" /> SKU Mapping
-                    </h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
-                </div>
-
-                {!isAuthenticated ? (
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <p className="text-sm text-slate-500">Enter Admin password to manage SKU links.</p>
-                        <input 
-                            type="password" 
-                            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            autoFocus
-                        />
-                        {error && <p className="text-red-500 text-sm">{error}</p>}
-                        <button className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock</button>
-                    </form>
-                ) : (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
-                            <button 
-                                onClick={() => setActiveTab('UPLOAD')}
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                New Upload
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('HISTORY')}
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Upload History
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto min-h-0">
-                            {activeTab === 'UPLOAD' ? (
-                                <div className="space-y-6 pt-2">
-                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
-                                        <p className="font-bold mb-1">How this works:</p>
-                                        <p>Upload an Excel with columns for <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>. The system will link them so staff can scan any code.</p>
-                                    </div>
-
-                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-slate-50">
-                                        <input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" />
-                                        <label htmlFor="mapping-upload" className="cursor-pointer block">
-                                            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
-                                            <span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload Mapping Excel"}</span>
-                                        </label>
-                                    </div>
-
-                                    {mappingStats !== null && (
-                                        <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">
-                                            Successfully mapped {mappingStats} codes!
-                                        </div>
-                                    )}
-
-                                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-
-                                    <button 
-                                        onClick={processMappingFile}
-                                        disabled={!file || uploading}
-                                        className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                                    >
-                                        {uploading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Update Database'}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3 pt-2">
-                                    {history.length === 0 && (
-                                        <div className="text-center text-slate-400 py-8 italic">No upload history found.</div>
-                                    )}
-                                    {history.map((item) => (
-                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition flex justify-between items-center group">
-                                            <div className="min-w-0 pr-4">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
-                                                    <span className="font-bold text-slate-700 truncate text-sm">{item.fileName}</span>
-                                                </div>
-                                                <div className="text-xs text-slate-400 flex items-center gap-2">
-                                                    <Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}
-                                                </div>
-                                            </div>
-                                            <button 
-                                                onClick={() => downloadHistoryItem(item)}
-                                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
-                                                title="Download Original File"
-                                            >
-                                                <Download className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const RoleSelection = ({ onSelectRole }) => {
-    const [loginRole, setLoginRole] = useState(null);
-
-    const handleRoleClick = (role) => {
-        setLoginRole(role);
-    };
-
-    const handleLoginSuccess = (user) => {
-        setLoginRole(null);
-        onSelectRole(user.role, user);
-    };
-
-    return (
-        <div className="min-h-screen h-[100dvh] bg-slate-900 flex items-center justify-center p-4 font-sans overflow-y-auto">
-            <LoginModal 
-                isOpen={!!loginRole} 
-                onClose={() => setLoginRole(null)} 
-                role={loginRole} 
-                onLoginSuccess={handleLoginSuccess}
-            />
-            
-            <div className="w-full max-w-[2000px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center p-6">
-                <div className="text-white space-y-6 lg:pl-12 text-center lg:text-left">
-                    <div>
-                        <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 leading-tight">
-                            H.V Global<br/>Warehouse OPS
-                        </h1>
-                        <p className="text-slate-400 text-base sm:text-lg md:text-xl mt-4 sm:mt-6 leading-relaxed max-w-xl mx-auto lg:mx-0">
-                            Real-time inventory orchestration for Finished Goods, Semi-Finished components, and WIP production lines.
-                        </p>
-                    </div>
-                    
-                    <div className="flex flex-row justify-center lg:justify-start gap-3 pt-4">
-                        <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1 max-w-[150px]">
-                            <div className="text-emerald-400 font-bold text-lg sm:text-xl mb-1">Live Sync</div>
-                            <div className="text-slate-400 text-xs sm:text-sm">Real-time Updates</div>
-                        </div>
-                        <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1 max-w-[150px]">
-                            <div className="text-blue-400 font-bold text-lg sm:text-xl mb-1">Secure</div>
-                            <div className="text-slate-400 text-xs sm:text-sm">Role Access</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 transform lg:hover:scale-[1.01] transition-transform duration-300 mx-auto w-full max-w-md lg:max-w-lg">
-                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        Let's Pack the Comfort <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </h2>
-                    
-                    <button onClick={() => handleRoleClick('ADMIN')} className="w-full p-4 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition flex items-center gap-4 group shadow-lg shadow-slate-200">
-                        <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors shrink-0"><LayoutDashboard className="w-6 h-6 text-blue-400" /></div>
-                        <div className="text-left">
-                            <div className="font-bold text-lg">Admin Dashboard</div>
-                            <div className="text-xs text-slate-400">Master Control & Analytics</div>
-                        </div>
-                    </button>
-                    
-                    <div className="space-y-3 pt-2">
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Store Staff Access</p>
-                        {[
-                            { id: 'FG_STORE', label: 'Finished Goods', icon: Package, color: 'emerald' },
-                            { id: 'SFG_STORE', label: 'Semi-Finished Store', icon: Truck, color: 'amber' },
-                            { id: 'WIP_FLOOR', label: 'Production Floor (WIP)', icon: Hammer, color: 'rose' },
-                        ].map((role) => (
-                            <button key={role.id} onClick={() => handleRoleClick(role.id)} className={`w-full flex items-center gap-4 p-4 border rounded-xl transition-all hover:shadow-md group bg-white hover:border-${role.color}-200 border-slate-100`}>
-                                <div className={`p-2 rounded-lg bg-${role.color}-50 text-${role.color}-600 shrink-0`}>
-                                    <role.icon className="w-5 h-5" />
-                                </div>
-                                <span className="font-bold text-slate-700 group-hover:text-slate-900">{role.label}</span>
-                                <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <ArrowLeft className="w-4 h-4 rotate-180 text-slate-300" />
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const StaffDashboard = ({ role, loggedInUser, logout }) => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPortal, setSelectedPortal] = useState(null);
-  const [selectedMasterSku, setSelectedMasterSku] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [targetOrder, setTargetOrder] = useState(null);
-  const [scanQuery, setScanQuery] = useState('');
-  const [manualMode, setManualMode] = useState(false);
-  const [skuMappings, setSkuMappings] = useState({});
-  const scanInputRef = useRef(null);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-        const mapping = {};
-        snap.docs.forEach(d => {
-            mapping[d.id] = d.data().masterSku;
-        });
-        setSkuMappings(mapping);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOrders(allOrders.filter(o => o.category === role));
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [role]);
-
-  useEffect(() => {
-    if (!modalOpen && !loading && selectedPortal !== undefined) {
-        const timer = setTimeout(() => { if (scanInputRef.current && !manualMode) scanInputRef.current.focus(); }, 200);
-        return () => clearTimeout(timer);
-    }
-  }, [modalOpen, loading, selectedPortal, role, manualMode]);
-
-  const toggleInputMode = () => {
-    setManualMode(prev => !prev);
-    if (scanInputRef.current) {
-        scanInputRef.current.blur();
-        setTimeout(() => { if(scanInputRef.current) scanInputRef.current.focus(); }, 50);
-    }
-  };
-
-  const initiateMarkOut = (order) => {
-    if (order.status === 'COMPLETED') return;
-    const qty = parseInt(order.quantity) || 0;
-    if (qty > 1) { setTargetOrder(order); setModalOpen(true); } 
-    else { completeOrder(order.id); }
-  };
-
-  const handleModalConfirm = async (pickQty) => {
-    setModalOpen(false);
-    if (!targetOrder) return;
-    if (pickQty === targetOrder.quantity) { await completeOrder(targetOrder.id); } 
-    else { await partialPick(targetOrder, pickQty); }
-    setTargetOrder(null);
-    setScanQuery('');
-  };
-
-  const processScan = (code) => {
-    let scannedSku = code.trim().toUpperCase();
-    if (!scannedSku) return;
-    if (skuMappings[scannedSku]) {
-        scannedSku = skuMappings[scannedSku]; 
-    }
-    const relevantList = (role === 'FG_STORE' && selectedPortal) ? orders.filter(o => (o.portal || 'General') === selectedPortal) : orders;
-    const matchedOrder = relevantList.find(o => o.sku.trim().toUpperCase() === scannedSku && o.status === 'PENDING');
-    if (matchedOrder) {
-        initiateMarkOut(matchedOrder);
-        setScanQuery('');
-    } else {
-        if (role === 'FG_STORE' && !selectedPortal) {
-             const anyMatch = orders.find(o => o.sku.trim().toUpperCase() === scannedSku && o.status === 'PENDING');
-             if (anyMatch) {
-                 if (!selectedPortal && anyMatch.portal) setSelectedPortal(anyMatch.portal);
-                 else if (selectedPortal !== anyMatch.portal) setSelectedPortal(anyMatch.portal || 'General');
-                 setTimeout(() => initiateMarkOut(anyMatch), 100);
-             }
-        }
-        setScanQuery('');
-    }
-  };
-
-  const handleScanKey = (e) => {
-    if (e.key === 'Enter') processScan(e.currentTarget.value);
-  };
-
-  const completeOrder = async (orderId) => {
-      try {
-        const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
-        await updateDoc(orderRef, { status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
-        setScanQuery('');
-      } catch (error) { console.error("Error:", error); }
-  };
-
-  const partialPick = async (originalOrder, pickedQty) => {
-      try {
-          const batch = writeBatch(db);
-          const originalRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id);
-          batch.update(originalRef, { quantity: originalOrder.quantity - pickedQty });
-          const newOrderRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-          const completedOrder = { ...originalOrder, quantity: pickedQty, status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() };
-          delete completedOrder.id;
-          batch.set(newOrderRef, completedOrder);
-          await batch.commit();
-      } catch (error) { console.error("Error:", error); }
-  };
-
-  const getRoleTitle = () => {
-    if (role === 'FG_STORE') return 'Finished Goods Store';
-    if (role === 'SFG_STORE') return 'Semi-Finished Store';
-    return 'WIP / Production Floor';
-  };
-
-  const portalGroups = useMemo(() => {
-    if (role !== 'FG_STORE') return {};
-    const groups = {};
-    orders.forEach(order => {
-      if (order.status !== 'PENDING') return;
-      const portal = order.portal || 'General';
-      if (!groups[portal]) groups[portal] = { count: 0, units: 0, name: portal };
-      groups[portal].count += 1;
-      groups[portal].units += (order.quantity || 0);
-    });
-    return groups;
-  }, [orders, role]);
-
-  const currentViewOrders = useMemo(() => {
-    if (role === 'FG_STORE' && selectedPortal) return orders.filter(o => (o.portal || 'General') === selectedPortal);
-    return orders;
-  }, [orders, role, selectedPortal]);
-
-  const masterSkuStats = useMemo(() => {
-    const stats = {};
-    currentViewOrders.forEach(order => {
-        if (order.status !== 'PENDING') return;
-        const master = getMasterSku(order.sku);
-        if (!stats[master]) stats[master] = 0;
-        stats[master] += (order.quantity || 0);
-    });
-    return stats;
-  }, [currentViewOrders]);
-
-  const displayOrders = useMemo(() => {
-    let list = currentViewOrders;
-    if (selectedMasterSku) list = list.filter(o => getMasterSku(o.sku) === selectedMasterSku);
-    if (scanQuery && manualMode) list = list.filter(o => o.sku.toUpperCase().includes(scanQuery.toUpperCase()));
-    return list.sort((a, b) => {
-        if (a.status === b.status) return a.sku.localeCompare(b.sku);
-        return a.status === 'PENDING' ? -1 : 1;
-    });
-  }, [currentViewOrders, selectedMasterSku, scanQuery, manualMode]);
-
-  const styles = role === 'FG_STORE' ? { bg: 'bg-emerald-600', btn: 'text-emerald-600 border-emerald-100' } : role === 'SFG_STORE' ? { bg: 'bg-amber-600', btn: 'text-amber-600 border-amber-100' } : { bg: 'bg-rose-600', btn: 'text-rose-600 border-rose-100' };
-
-  if (role === 'FG_STORE' && !selectedPortal) {
-    return (
-      <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full">
-        <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20`}>
-          <div className="w-full px-2 flex justify-between items-center">
-            <div>
-                <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-6 h-6" />{getRoleTitle()}</h2>
-                <p className="text-emerald-100 text-sm opacity-90">Welcome, {loggedInUser ? loggedInUser.name : 'Staff'}</p>
-            </div>
-            <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30"><LogOut className="w-5 h-5" /></button>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 w-full">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
-            {Object.values(portalGroups).length === 0 && !loading && (
-                <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
-            )}
-            {Object.values(portalGroups).map((group) => (
-                <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group w-full">
-                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 group-hover:w-2 transition-all"></div>
-                <h3 className="text-lg font-bold text-slate-800 uppercase">{group.name}</h3>
-                <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800">{group.units}</span><span className="text-sm text-slate-500 font-medium">units</span></div>
-                </button>
-            ))}
-            </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full max-w-[100vw]">
-      <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} />
-      
-      {/* HEADER - FIXED TOP */}
-      <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20 w-full`}>
-        <div className="w-full px-2 flex justify-between items-center">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              {role === 'FG_STORE' && selectedPortal && <button onClick={() => setSelectedPortal(null)} className="p-1 -ml-2 mr-1 hover:bg-white/20 rounded-full shrink-0"><ArrowLeft className="w-6 h-6" /></button>}
-              <h2 className="text-lg sm:text-xl font-bold truncate">{role === 'FG_STORE' ? selectedPortal : getRoleTitle()}</h2>
-            </div>
-            <div className="flex gap-2 text-xs sm:text-sm opacity-90 truncate mt-0.5">
-                <span className="font-semibold truncate">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
-                <span className="opacity-60">|</span>
-                <span className="truncate">{displayOrders.filter(o => o.status === 'PENDING').length} Tasks</span>
-            </div>
-          </div>
-          <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 shrink-0 ml-2"><LogOut className="w-5 h-5" /></button>
-        </div>
-      </div>
-
-      {/* FIXED CONTROLS SECTION */}
-      <div className="flex-none p-2 sm:p-4 pb-0 z-10 bg-slate-50 w-full max-w-full">
-        {/* Search Bar */}
-        <div className="bg-white p-2 sm:p-3 rounded-xl shadow-md border-2 border-slate-300 flex items-center gap-2 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
-            <button onClick={toggleInputMode} className={`p-2 sm:p-3 rounded-lg transition ${manualMode ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
-                {manualMode ? <Keyboard className="w-5 h-5 sm:w-6 sm:h-6" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6" />}
-            </button>
-            <div className="flex-1 flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 sm:px-3 h-10 sm:h-12">
-                <div className="mr-2">{manualMode ? <Search className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 animate-pulse" />}</div>
-                <input ref={scanInputRef} type="text" placeholder={manualMode ? "Search..." : "Scan..."} className="flex-1 bg-transparent outline-none font-mono text-base sm:text-lg text-slate-800 font-bold w-full" value={scanQuery} onChange={(e) => setScanQuery(e.target.value)} onKeyDown={handleScanKey} autoFocus autoComplete="off" />
-                {scanQuery && <button onClick={() => setScanQuery('')} className="p-1 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>}
-            </div>
-        </div>
-
-        {/* Master SKU Filter */}
-        {Object.keys(masterSkuStats).length > 0 && (
-          <div className="w-full overflow-x-auto pb-2 pt-2 scrollbar-hide snap-x touch-pan-x">
-             <div className="flex gap-2 min-w-min">
-             <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all ${!selectedMasterSku ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
-                All
-             </button>
-             {Object.entries(masterSkuStats).map(([master, qty]) => (
-                 <button key={master} onClick={() => setSelectedMasterSku(selectedMasterSku === master ? null : master)} className={`snap-start flex-shrink-0 px-3 py-2 sm:px-4 sm:py-2 rounded-xl font-bold text-sm border-2 flex flex-col items-center justify-center min-w-[70px] sm:min-w-[80px] transition-all ${selectedMasterSku === master ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-200'}`}>
-                    <span className="text-[10px] uppercase opacity-70">SKU</span>
-                    <span className="text-sm sm:text-base leading-none mb-0.5">{master}</span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${selectedMasterSku === master ? 'bg-blue-200 text-blue-800' : 'bg-slate-100 text-slate-500'}`}>{qty}</span>
-                 </button>
-             ))}
-             </div>
-          </div>
-        )}
-      </div>
-
-      {/* SCROLLABLE CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto p-2 sm:p-4 w-full">
-        {/* Responsive Grid Tasks (100% width on mobile) */}
-        <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-12" : "pb-12"}>
-            {displayOrders.length === 0 && (
-                <div className="col-span-full p-8 text-center text-slate-400 flex flex-col items-center bg-white rounded-xl border border-dashed border-slate-300">
-                    <CheckCircle2 className="w-12 h-12 mb-2 opacity-20" />
-                    <p>No tasks found for this filter</p>
-                </div>
-            )}
-            {displayOrders.map(order => {
-              const isCompleted = order.status === 'COMPLETED';
-              return (
-                <div key={order.id} className={`p-4 rounded-xl border shadow-sm transition-all duration-200 flex flex-col justify-between h-full ${isCompleted ? 'bg-emerald-50/50 border-emerald-100 opacity-60' : 'bg-white border-slate-200 hover:shadow-md hover:border-blue-300'}`}>
-                  
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1 min-w-0 pr-2">
-                       <div className="flex items-center gap-2 mb-1">
-                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isCompleted ? 'COMPLETED' : (order.portal || 'Standard')}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{getMasterSku(order.sku)}</span>
-                       </div>
-                       <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
-                    </div>
-                    {isCompleted && <CheckCheck className="w-6 h-6 text-emerald-500" />}
-                  </div>
-
-                  <div className="flex items-end justify-between pt-2 border-t border-slate-50 mt-auto">
-                    <div>
-                        <span className="text-[10px] text-slate-400 uppercase font-bold">Quantity</span>
-                        <div className={`text-2xl font-bold leading-none ${isCompleted ? 'text-emerald-600' : 'text-slate-800'}`}>{order.quantity}</div>
-                    </div>
-                    
-                    {!isCompleted && (
-                        <button onClick={() => initiateMarkOut(order)} className={`px-4 py-3 sm:py-2 rounded-lg font-bold text-sm transition active:scale-95 flex items-center gap-2 ${styles.btn} border bg-white hover:bg-slate-50 shadow-sm`}>
-                            Pick Item <ArrowLeft className="w-4 h-4 rotate-180" />
-                        </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ... SettingsView (kept unchanged for brevity as it was correct) ...
+// --- SETTINGS VIEW ---
 const SettingsView = () => {
     const [staff, setStaff] = useState([]);
     const [newName, setNewName] = useState('');
@@ -982,6 +388,7 @@ const SettingsView = () => {
     );
 };
 
+// --- REPORTS VIEW ---
 const ReportsView = ({ allOrders, stats }) => {
   const pendingTasks = stats.fg + stats.sfg + stats.wip;
   const isLocked = pendingTasks > 0;
@@ -992,7 +399,6 @@ const ReportsView = ({ allOrders, stats }) => {
       return;
     }
     
-    // Create Worksheet
     const wsData = allOrders.map(order => ({
       'SKU': order.sku,
       'Master SKU': getMasterSku(order.sku),
@@ -1021,7 +427,6 @@ const ReportsView = ({ allOrders, stats }) => {
     return Object.entries(dist).sort((a,b) => b[1] - a[1]);
   }, [allOrders]);
 
-  // Aggregate user performance
   const userPerformance = useMemo(() => {
     const perf = {};
     allOrders.forEach(o => {
@@ -1036,8 +441,6 @@ const ReportsView = ({ allOrders, stats }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-       
-       {/* Export Card */}
        <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
           <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
              {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
@@ -1061,7 +464,6 @@ const ReportsView = ({ allOrders, stats }) => {
        </div>
 
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Portal Chart */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
              <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution
@@ -1079,7 +481,6 @@ const ReportsView = ({ allOrders, stats }) => {
              </div>
           </div>
 
-          {/* Activity Log / Leaderboard */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
              <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance
@@ -1113,6 +514,7 @@ const ReportsView = ({ allOrders, stats }) => {
   );
 };
 
+// --- STATS VIEW ---
 const StatsView = () => {
     const [history, setHistory] = useState([]);
     const [filter, setFilter] = useState(7); // Default to 7 days
@@ -1275,6 +677,604 @@ const StatsView = () => {
     );
 };
 
+const SkuMappingModal = ({ isOpen, onClose }) => {
+    const [password, setPassword] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [error, setError] = useState('');
+    const [uploading, setUploading] = useState(false);
+    const [file, setFile] = useState(null);
+    const [mappingStats, setMappingStats] = useState(null);
+    const [history, setHistory] = useState([]);
+    const [activeTab, setActiveTab] = useState('UPLOAD'); 
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'), orderBy('uploadedAt', 'desc'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubscribe();
+    }, [isAuthenticated]);
+
+    const handleLogin = (e) => {
+        e.preventDefault();
+        if (password === 'HV@2026') {
+            setIsAuthenticated(true);
+            setError('');
+        } else {
+            setError('Incorrect Password');
+        }
+    };
+
+    const handleFile = (e) => {
+        setFile(e.target.files[0]);
+        setError('');
+        setMappingStats(null);
+    };
+
+    const processMappingFile = async () => {
+        if (!file) return;
+        setUploading(true);
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const rawData = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
+                
+                const batch = writeBatch(db);
+                let count = 0;
+                
+                rawData.forEach(row => {
+                    const keys = Object.keys(row);
+                    const masterKey = keys.find(k => k.toLowerCase().includes('master'));
+                    const fgKey = keys.find(k => k.toLowerCase().includes('fg') && k.toLowerCase().includes('sku'));
+                    const sfgKey = keys.find(k => k.toLowerCase().includes('sf') && k.toLowerCase().includes('sku'));
+
+                    if (masterKey) {
+                        const masterSku = String(row[masterKey]).trim();
+                        
+                        if (fgKey && row[fgKey]) {
+                            const fgCode = String(row[fgKey]).trim().toUpperCase();
+                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', fgCode);
+                            batch.set(ref, { masterSku: masterSku, type: 'FG' });
+                            count++;
+                        }
+
+                        if (sfgKey && row[sfgKey]) {
+                            const sfgCode = String(row[sfgKey]).trim().toUpperCase();
+                            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', sfgCode);
+                            batch.set(ref, { masterSku: masterSku, type: 'SFG' });
+                            count++;
+                        }
+                    }
+                });
+
+                // Save to history
+                const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
+                batch.set(historyRef, {
+                    fileName: file.name,
+                    uploadedAt: serverTimestamp(),
+                    uploadedBy: 'Admin',
+                    rowCount: rawData.length,
+                    rawData: JSON.stringify(rawData) // Storing stringified JSON to reconstruct later
+                });
+
+                await batch.commit();
+                setMappingStats(count);
+                setFile(null);
+            } catch (err) {
+                console.error(err);
+                setError('Failed to process file. Ensure standard headers or file size under limit.');
+            } finally {
+                setUploading(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleClearMappings = async () => {
+        if (!confirm("Are you sure you want to delete ALL existing SKU mappings? This cannot be undone.")) return;
+        setUploading(true);
+        try {
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
+            const snapshot = await getDocs(q);
+            const batch = writeBatch(db);
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            alert("All mappings cleared.");
+        } catch(e) {
+            console.error(e);
+            alert("Error clearing mappings.");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const deleteHistoryItem = async (id) => {
+         if (!confirm("Delete this history record?")) return;
+         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history', id));
+    };
+
+    const downloadHistoryItem = (item) => {
+        try {
+            const data = JSON.parse(item.rawData);
+            const ws = window.XLSX.utils.json_to_sheet(data);
+            const wb = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(wb, ws, "Mapping");
+            window.XLSX.writeFile(wb, item.fileName || 'mapping_backup.xlsx');
+        } catch (e) {
+            alert("Error downloading file: Data may be corrupted.");
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+                <div className="flex justify-between items-center mb-6 flex-none">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Link className="w-5 h-5 text-indigo-500" /> SKU Mapping
+                    </h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+
+                {!isAuthenticated ? (
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <p className="text-sm text-slate-500">Enter Admin password to manage SKU links.</p>
+                        <input 
+                            type="password" 
+                            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="Password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            autoFocus
+                        />
+                        {error && <p className="text-red-500 text-sm">{error}</p>}
+                        <button className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock</button>
+                    </form>
+                ) : (
+                    <div className="flex flex-col h-full overflow-hidden">
+                        <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
+                            <button onClick={() => setActiveTab('UPLOAD')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>New Upload</button>
+                            <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Upload History</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto min-h-0">
+                            {activeTab === 'UPLOAD' ? (
+                                <div className="space-y-6 pt-2">
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
+                                        <p className="font-bold mb-1">How this works:</p>
+                                        <p>Upload an Excel with columns for <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>.</p>
+                                    </div>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-slate-50">
+                                        <input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" />
+                                        <label htmlFor="mapping-upload" className="cursor-pointer block">
+                                            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                                            <span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload Mapping Excel"}</span>
+                                        </label>
+                                    </div>
+                                    {mappingStats !== null && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">Successfully mapped {mappingStats} codes!</div>}
+                                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                                    <div className="flex gap-3">
+                                        <button onClick={handleClearMappings} className="px-4 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 flex-none" title="Clear all mappings"><Trash2 className="w-5 h-5" /></button>
+                                        <button onClick={processMappingFile} disabled={!file || uploading} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                                            {uploading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Update Database'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 pt-2">
+                                    {history.length === 0 && <div className="text-center text-slate-400 py-8 italic">No upload history found.</div>}
+                                    {history.map((item) => (
+                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition flex justify-between items-center group">
+                                            <div className="min-w-0 pr-4">
+                                                <div className="flex items-center gap-2 mb-1"><FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" /><span className="font-bold text-slate-700 truncate text-sm">{item.fileName}</span></div>
+                                                <div className="text-xs text-slate-400 flex items-center gap-2"><Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}</div>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => downloadHistoryItem(item)} className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition" title="Download Original File"><Download className="w-4 h-4" /></button>
+                                                <button onClick={() => deleteHistoryItem(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const RoleSelection = ({ onSelectRole }) => {
+    const [loginRole, setLoginRole] = useState(null);
+
+    const handleRoleClick = (role) => {
+        setLoginRole(role);
+    };
+
+    const handleLoginSuccess = (user) => {
+        setLoginRole(null);
+        onSelectRole(user.role, user);
+    };
+
+    return (
+        <div className="min-h-screen h-[100dvh] bg-slate-900 flex items-center justify-center p-4 font-sans overflow-y-auto">
+            <LoginModal isOpen={!!loginRole} onClose={() => setLoginRole(null)} role={loginRole} onLoginSuccess={handleLoginSuccess} />
+            <div className="w-full max-w-[2000px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center p-6">
+                <div className="text-white space-y-6 lg:pl-12 text-center lg:text-left">
+                    <div>
+                        <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 leading-tight">H.V Global<br/>Warehouse OPS</h1>
+                        <p className="text-slate-400 text-base sm:text-lg md:text-xl mt-4 sm:mt-6 leading-relaxed max-w-xl mx-auto lg:mx-0">Real-time inventory orchestration for Finished Goods, Semi-Finished components, and WIP production lines.</p>
+                    </div>
+                    <div className="flex flex-row justify-center lg:justify-start gap-3 pt-4">
+                        <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1 max-w-[150px]">
+                            <div className="text-emerald-400 font-bold text-lg sm:text-xl mb-1">Live Sync</div><div className="text-slate-400 text-xs sm:text-sm">Real-time Updates</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl border border-slate-700 backdrop-blur-sm flex-1 max-w-[150px]">
+                            <div className="text-blue-400 font-bold text-lg sm:text-xl mb-1">Secure</div><div className="text-slate-400 text-xs sm:text-sm">Role Access</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 transform lg:hover:scale-[1.01] transition-transform duration-300 mx-auto w-full max-w-md lg:max-w-lg">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">Let's Pack the Comfort <ChevronRight className="w-5 h-5 text-slate-400" /></h2>
+                    <button onClick={() => handleRoleClick('ADMIN')} className="w-full p-4 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition flex items-center gap-4 group shadow-lg shadow-slate-200">
+                        <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors shrink-0"><LayoutDashboard className="w-6 h-6 text-blue-400" /></div>
+                        <div className="text-left"><div className="font-bold text-lg">Admin Dashboard</div><div className="text-xs text-slate-400">Master Control & Analytics</div></div>
+                    </button>
+                    <div className="space-y-3 pt-2">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Store Staff Access</p>
+                        {[
+                            { id: 'FG_STORE', label: 'Finished Goods', icon: Package, color: 'emerald' },
+                            { id: 'SFG_STORE', label: 'Semi-Finished Store', icon: Truck, color: 'amber' },
+                            { id: 'WIP_FLOOR', label: 'Production Floor (WIP)', icon: Hammer, color: 'rose' },
+                        ].map((role) => (
+                            <button key={role.id} onClick={() => handleRoleClick(role.id)} className={`w-full flex items-center gap-4 p-4 border rounded-xl transition-all hover:shadow-md group bg-white hover:border-${role.color}-200 border-slate-100`}>
+                                <div className={`p-2 rounded-lg bg-${role.color}-50 text-${role.color}-600 shrink-0`}><role.icon className="w-5 h-5" /></div>
+                                <span className="font-bold text-slate-700 group-hover:text-slate-900">{role.label}</span>
+                                <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><ArrowLeft className="w-4 h-4 rotate-180 text-slate-300" /></div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const StaffDashboard = ({ role, loggedInUser, logout }) => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPortal, setSelectedPortal] = useState(null);
+  const [selectedMasterSku, setSelectedMasterSku] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [targetOrder, setTargetOrder] = useState(null);
+  const [scanQuery, setScanQuery] = useState('');
+  const [manualMode, setManualMode] = useState(false);
+  const [skuMappings, setSkuMappings] = useState({});
+  const [reverseMappings, setReverseMappings] = useState({}); 
+  const [scanError, setScanError] = useState(null);
+  const scanInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+        const mapping = {};
+        const reverse = {};
+        snap.docs.forEach(d => {
+            const data = d.data();
+            const childCode = d.id; 
+            const master = data.masterSku;
+            const type = data.type; 
+
+            mapping[childCode] = master;
+
+            if (!reverse[master]) reverse[master] = {};
+            reverse[master][type] = childCode;
+        });
+        setSkuMappings(mapping);
+        setReverseMappings(reverse);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setOrders(allOrders.filter(o => o.category === role));
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [role]);
+
+  useEffect(() => {
+    if (!modalOpen && !loading && selectedPortal !== undefined) {
+        const timer = setTimeout(() => { if (scanInputRef.current && !manualMode) scanInputRef.current.focus(); }, 200);
+        return () => clearTimeout(timer);
+    }
+  }, [modalOpen, loading, selectedPortal, role, manualMode]);
+
+  const toggleInputMode = () => {
+    setManualMode(prev => !prev);
+    if (scanInputRef.current) {
+        scanInputRef.current.blur();
+        setTimeout(() => { if(scanInputRef.current) scanInputRef.current.focus(); }, 50);
+    }
+  };
+
+  const initiateMarkOut = (order) => {
+    if (order.status === 'COMPLETED') return;
+    const qty = parseInt(order.quantity) || 0;
+    if (qty > 1) { setTargetOrder(order); setModalOpen(true); } 
+    else { completeOrder(order.id); }
+  };
+
+  const handleModalConfirm = async (pickQty) => {
+    setModalOpen(false);
+    if (!targetOrder) return;
+    if (pickQty === targetOrder.quantity) { await completeOrder(targetOrder.id); } 
+    else { await partialPick(targetOrder, pickQty); }
+    setTargetOrder(null);
+    setScanQuery('');
+  };
+
+  const processScan = (code) => {
+    setScanError(null);
+    let scannedSku = code.trim().toUpperCase();
+    if (!scannedSku) return;
+
+    let resolvedMasterSku = skuMappings[scannedSku] || scannedSku;
+
+    const relevantList = (role === 'FG_STORE' && selectedPortal) 
+        ? orders.filter(o => (o.portal || 'General') === selectedPortal) 
+        : orders;
+
+    const matchedOrder = relevantList.find(o => o.sku.trim().toUpperCase() === resolvedMasterSku);
+
+    if (matchedOrder && matchedOrder.status === 'PENDING') {
+        initiateMarkOut(matchedOrder);
+        setScanQuery('');
+    } else {
+        if (role === 'FG_STORE' && !selectedPortal) {
+             const anyMatch = orders.find(o => o.sku.trim().toUpperCase() === resolvedMasterSku && o.status === 'PENDING');
+             if (anyMatch) {
+                 if (!selectedPortal && anyMatch.portal) setSelectedPortal(anyMatch.portal);
+                 else if (selectedPortal !== anyMatch.portal) setSelectedPortal(anyMatch.portal || 'General');
+                 setTimeout(() => initiateMarkOut(anyMatch), 100);
+             } else {
+                 setScanError(`No pending task found for: ${scannedSku}`);
+             }
+        } else {
+             setScanError(`No pending task found for: ${scannedSku}`);
+        }
+        setScanQuery('');
+    }
+  };
+
+  const handleScanKey = (e) => {
+    if (e.key === 'Enter') processScan(e.currentTarget.value);
+  };
+
+  const completeOrder = async (orderId) => {
+      try {
+        const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
+        await updateDoc(orderRef, { status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
+        setScanQuery('');
+      } catch (error) { console.error("Error:", error); }
+  };
+
+  const partialPick = async (originalOrder, pickedQty) => {
+      try {
+          const batch = writeBatch(db);
+          const originalRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id);
+          batch.update(originalRef, { quantity: originalOrder.quantity - pickedQty });
+          const newOrderRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+          const completedOrder = { ...originalOrder, quantity: pickedQty, status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() };
+          delete completedOrder.id;
+          batch.set(newOrderRef, completedOrder);
+          await batch.commit();
+      } catch (error) { console.error("Error:", error); }
+  };
+
+  const getRoleTitle = () => {
+    if (role === 'FG_STORE') return 'Finished Goods Store';
+    if (role === 'SFG_STORE') return 'Semi-Finished Store';
+    return 'WIP / Production Floor';
+  };
+
+  const portalGroups = useMemo(() => {
+    if (role !== 'FG_STORE') return {};
+    const groups = {};
+    orders.forEach(order => {
+      if (order.status !== 'PENDING') return;
+      const portal = order.portal || 'General';
+      if (!groups[portal]) groups[portal] = { count: 0, units: 0, name: portal };
+      groups[portal].count += 1;
+      groups[portal].units += (order.quantity || 0);
+    });
+    return groups;
+  }, [orders, role]);
+
+  const currentViewOrders = useMemo(() => {
+    if (role === 'FG_STORE' && selectedPortal) return orders.filter(o => (o.portal || 'General') === selectedPortal);
+    return orders;
+  }, [orders, role, selectedPortal]);
+
+  const masterSkuStats = useMemo(() => {
+    const stats = {};
+    currentViewOrders.forEach(order => {
+        if (order.status !== 'PENDING') return;
+        const master = getMasterSku(order.sku);
+        if (!stats[master]) stats[master] = 0;
+        stats[master] += (order.quantity || 0);
+    });
+    return stats;
+  }, [currentViewOrders]);
+
+  const displayOrders = useMemo(() => {
+    let list = currentViewOrders;
+    if (selectedMasterSku) list = list.filter(o => getMasterSku(o.sku) === selectedMasterSku);
+    if (scanQuery && manualMode) list = list.filter(o => o.sku.toUpperCase().includes(scanQuery.toUpperCase()));
+    return list.sort((a, b) => {
+        if (a.status === b.status) return a.sku.localeCompare(b.sku);
+        return a.status === 'PENDING' ? -1 : 1;
+    });
+  }, [currentViewOrders, selectedMasterSku, scanQuery, manualMode]);
+
+  const styles = role === 'FG_STORE' ? { bg: 'bg-emerald-600', btn: 'text-emerald-600 border-emerald-100' } : role === 'SFG_STORE' ? { bg: 'bg-amber-600', btn: 'text-amber-600 border-amber-100' } : { bg: 'bg-rose-600', btn: 'text-rose-600 border-rose-100' };
+
+  if (role === 'FG_STORE' && !selectedPortal) {
+    return (
+      <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full">
+        <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20`}>
+          <div className="w-full px-2 flex justify-between items-center">
+            <div>
+                <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-6 h-6" />{getRoleTitle()}</h2>
+                <p className="text-emerald-100 text-sm opacity-90">Welcome, {loggedInUser ? loggedInUser.name : 'Staff'}</p>
+            </div>
+            <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30"><LogOut className="w-5 h-5" /></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+            {Object.values(portalGroups).length === 0 && !loading && (
+                <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
+            )}
+            {Object.values(portalGroups).map((group) => (
+                <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group w-full">
+                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 group-hover:w-2 transition-all"></div>
+                <h3 className="text-lg font-bold text-slate-800 uppercase">{group.name}</h3>
+                <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800">{group.units}</span><span className="text-sm text-slate-500 font-medium">units</span></div>
+                </button>
+            ))}
+            </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full max-w-[100vw]">
+      <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} />
+      
+      {/* HEADER - FIXED TOP */}
+      <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20 w-full`}>
+        <div className="w-full px-2 flex justify-between items-center">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              {role === 'FG_STORE' && selectedPortal && <button onClick={() => setSelectedPortal(null)} className="p-1 -ml-2 mr-1 hover:bg-white/20 rounded-full shrink-0"><ArrowLeft className="w-6 h-6" /></button>}
+              <h2 className="text-lg sm:text-xl font-bold truncate">{role === 'FG_STORE' ? selectedPortal : getRoleTitle()}</h2>
+            </div>
+            <div className="flex gap-2 text-xs sm:text-sm opacity-90 truncate mt-0.5">
+                <span className="font-semibold truncate">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
+                <span className="opacity-60">|</span>
+                <span className="truncate">{displayOrders.filter(o => o.status === 'PENDING').length} Tasks</span>
+            </div>
+          </div>
+          <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 shrink-0 ml-2"><LogOut className="w-5 h-5" /></button>
+        </div>
+      </div>
+
+      {/* FIXED CONTROLS SECTION */}
+      <div className="flex-none p-2 sm:p-4 pb-0 z-10 bg-slate-50 w-full max-w-full">
+        {/* Search Bar */}
+        <div className={`bg-white p-2 sm:p-3 rounded-xl shadow-md border-2 flex items-center gap-2 transition-all ${scanError ? 'border-red-400 ring-4 ring-red-100' : 'border-slate-300 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100'}`}>
+            <button onClick={toggleInputMode} className={`p-2 sm:p-3 rounded-lg transition ${manualMode ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
+                {manualMode ? <Keyboard className="w-5 h-5 sm:w-6 sm:h-6" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6" />}
+            </button>
+            <div className="flex-1 flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 sm:px-3 h-10 sm:h-12">
+                <div className="mr-2">{manualMode ? <Search className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 animate-pulse" />}</div>
+                <input ref={scanInputRef} type="text" placeholder={manualMode ? "Search..." : "Scan..."} className="flex-1 bg-transparent outline-none font-mono text-base sm:text-lg text-slate-800 font-bold w-full" value={scanQuery} onChange={(e) => {setScanQuery(e.target.value); if(scanError) setScanError(null);}} onKeyDown={handleScanKey} autoFocus autoComplete="off" />
+                {scanQuery && <button onClick={() => setScanQuery('')} className="p-1 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>}
+            </div>
+        </div>
+        {scanError && <p className="text-red-500 text-xs font-bold mt-1 ml-2 animate-bounce">{scanError}</p>}
+
+        {/* Master SKU Filter */}
+        {Object.keys(masterSkuStats).length > 0 && (
+          <div className="w-full overflow-x-auto pb-2 pt-2 scrollbar-hide snap-x touch-pan-x">
+             <div className="flex gap-2 min-w-min">
+             <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all ${!selectedMasterSku ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                All
+             </button>
+             {Object.entries(masterSkuStats).map(([master, qty]) => (
+                 <button key={master} onClick={() => setSelectedMasterSku(selectedMasterSku === master ? null : master)} className={`snap-start flex-shrink-0 px-3 py-2 sm:px-4 sm:py-2 rounded-xl font-bold text-sm border-2 flex flex-col items-center justify-center min-w-[70px] sm:min-w-[80px] transition-all ${selectedMasterSku === master ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-200'}`}>
+                    <span className="text-[10px] uppercase opacity-70">SKU</span>
+                    <span className="text-sm sm:text-base leading-none mb-0.5">{master}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${selectedMasterSku === master ? 'bg-blue-200 text-blue-800' : 'bg-slate-100 text-slate-500'}`}>{qty}</span>
+                 </button>
+             ))}
+             </div>
+          </div>
+        )}
+      </div>
+
+      {/* SCROLLABLE CONTENT AREA */}
+      <div className="flex-1 overflow-y-auto p-2 sm:p-4 w-full">
+        {/* Responsive Grid Tasks (100% width on mobile) */}
+        <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-12" : "pb-12"}>
+            {displayOrders.length === 0 && (
+                <div className="col-span-full p-8 text-center text-slate-400 flex flex-col items-center bg-white rounded-xl border border-dashed border-slate-300">
+                    <CheckCircle2 className="w-12 h-12 mb-2 opacity-20" />
+                    <p>No tasks found for this filter</p>
+                </div>
+            )}
+            {displayOrders.map(order => {
+              const isCompleted = order.status === 'COMPLETED';
+              
+              // Resolve display code from reverse map
+              const displayFG = reverseMappings[order.sku]?.FG;
+              const displaySFG = reverseMappings[order.sku]?.SFG;
+
+              return (
+                <div key={order.id} className={`p-4 rounded-xl border shadow-sm transition-all duration-200 flex flex-col justify-between h-full ${isCompleted ? 'bg-emerald-50/50 border-emerald-100 opacity-60' : 'bg-white border-slate-200 hover:shadow-md hover:border-blue-300'}`}>
+                  
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1 min-w-0 pr-2">
+                       <div className="flex items-center gap-2 mb-1">
+                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isCompleted ? 'COMPLETED' : (order.portal || 'Standard')}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{getMasterSku(order.sku)}</span>
+                       </div>
+                       <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
+                       
+                       {/* Display Mapped SKU codes */}
+                       {role === 'FG_STORE' && displayFG && (
+                           <div className="text-xs font-mono text-emerald-600 mt-1 bg-emerald-50 inline-block px-2 py-0.5 rounded border border-emerald-100">FG: {displayFG}</div>
+                       )}
+                       {role === 'SFG_STORE' && displaySFG && (
+                           <div className="text-xs font-mono text-amber-600 mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded border border-amber-100">SFG: {displaySFG}</div>
+                       )}
+                    </div>
+                    {isCompleted && <CheckCheck className="w-6 h-6 text-emerald-500" />}
+                  </div>
+
+                  <div className="flex items-end justify-between pt-2 border-t border-slate-50 mt-auto">
+                    <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Quantity</span>
+                        <div className={`text-2xl font-bold leading-none ${isCompleted ? 'text-emerald-600' : 'text-slate-800'}`}>{order.quantity}</div>
+                    </div>
+                    
+                    {!isCompleted && (
+                        <button onClick={() => initiateMarkOut(order)} className={`px-4 py-3 sm:py-2 rounded-lg font-bold text-sm transition active:scale-95 flex items-center gap-2 ${styles.btn} border bg-white hover:bg-slate-50 shadow-sm`}>
+                            Pick Item <ArrowLeft className="w-4 h-4 rotate-180" />
+                        </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ... AdminDashboard, SettingsView, ReportsView, StatsView (kept unchanged) ...
 const AdminDashboard = ({ user, logout }) => {
   const [view, setView] = useState('DASHBOARD'); // 'DASHBOARD' | 'REPORTS' | 'SETTINGS' | 'STATS'
   const [stats, setStats] = useState({ fg: 0, sfg: 0, wip: 0, totalFgDay: 0, totalSfgDay: 0, totalWipDay: 0, completedUnits: 0 });
@@ -1436,59 +1436,23 @@ const AdminDashboard = ({ user, logout }) => {
   };
 
   const handleClearAll = async () => {
-    const confirmation = prompt("Type 'RESET' to archive today's data and clear the dashboard for tomorrow.");
-    if (confirmation !== 'RESET') return;
-    
-    setIsUploading(true);
-    try {
-        // 1. Fetch current data
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-        const snapshot = await getDocs(q);
-        const orders = snapshot.docs.map(d => d.data());
-
-        // 2. Aggregate Stats
-        const stats = {
-            date: new Date().toISOString(),
-            total: orders.length,
-            fg: orders.filter(o => o.category === 'FG_STORE').length,
-            sfg: orders.filter(o => o.category === 'SFG_STORE').length,
-            wip: orders.filter(o => o.category === 'WIP_FLOOR').length,
-            completed: orders.filter(o => o.status === 'COMPLETED').length,
-            units: orders.reduce((acc, o) => acc + (parseInt(o.quantity) || 0), 0)
-        };
-
-        // 3. Save to History (Using timestamp ID to allow multiple resets per day without overwriting if needed, or stick to date to merge)
-        const timestampId = new Date().getTime().toString();
-        const todayStr = new Date().toISOString().split('T')[0];
-         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', timestampId), {
-            ...stats,
-            day: todayStr
-        });
-
-        // 4. Delete active orders
-        const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
-        await Promise.all(deletePromises);
-        
-        // 5. Reset daily summary
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: 0 });
-        
-        alert("System Archived & Reset Successfully");
-    } catch (e) {
-        console.error(e);
-        alert("Error during reset");
-    } finally {
-        setIsUploading(false);
-    }
+    if(prompt("Type 'RESET' to delete all data") !== 'RESET') return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+    const snapshot = await getDocs(q);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: 0 });
+    alert("Reset Complete");
   };
 
   const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 text-slate-900">
-      <SkuMappingModal isOpen={mappingModalOpen} onClose={() => setMappingModalOpen(false)} />
+      
       {/* Modern Header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
-         <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
+         <div className="flex items-center gap-6">
              <div className="flex items-center gap-3">
                <div className="p-2 bg-slate-900 rounded-lg"><LayoutDashboard className="w-5 h-5 text-white" /></div>
                <div>
@@ -1498,75 +1462,35 @@ const AdminDashboard = ({ user, logout }) => {
              </div>
              
              {/* Navigation Tabs */}
-             <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
+             <div className="flex bg-slate-100 p-1 rounded-xl">
                 <button 
                   onClick={() => setView('DASHBOARD')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Dashboard
                 </button>
                 <button 
                   onClick={() => setView('REPORTS')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <FileSpreadsheet className="w-4 h-4" /> <span className="hidden md:inline">Reports</span>
-                </button>
-                <button 
-                  onClick={() => setView('STATS')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'STATS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <BarChart3 className="w-4 h-4" /> <span className="hidden md:inline">Stats</span>
+                  <BarChart3 className="w-4 h-4" /> Reports
                 </button>
                 <button 
                   onClick={() => setView('SETTINGS')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <Settings className="w-4 h-4" /> <span className="hidden md:inline">Settings</span>
+                  <Settings className="w-4 h-4" /> Settings
                 </button>
              </div>
          </div>
 
-         {/* Mobile Navigation Tabs */}
-         <div className="flex sm:hidden w-full bg-slate-100 p-1 rounded-xl mb-3 overflow-x-auto justify-between">
-            <button 
-                onClick={() => setView('DASHBOARD')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'DASHBOARD' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Dash
-            </button>
-            <button 
-                onClick={() => setView('REPORTS')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'REPORTS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Reports
-            </button>
-            <button 
-                onClick={() => setView('STATS')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'STATS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Stats
-            </button>
-            <button 
-                onClick={() => setView('SETTINGS')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'SETTINGS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Settings
-            </button>
-         </div>
-
-         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-             {view === 'DASHBOARD' && (
-               <>
-               <button onClick={() => setMappingModalOpen(true)} className="flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95">
-                   <Link className="w-4 h-4" />
-                   <span className="hidden sm:inline">SKU Map</span>
-               </button>
-               <button onClick={() => document.getElementById('file-upload').click()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
-                   <Upload className="w-4 h-4" />
-                   <span>Upload Orders</span>
-               </button>
-               </>
-             )}
+         <div className="flex items-center gap-4">
+            {view === 'DASHBOARD' && (
+              <button onClick={() => document.getElementById('file-upload').click()} className="flex items-center gap-2 text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Excel</span>
+              </button>
+            )}
             <button onClick={logout} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-red-500">
                 <LogOut className="w-5 h-5" />
             </button>
@@ -1574,15 +1498,13 @@ const AdminDashboard = ({ user, logout }) => {
          <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
       </header>
 
-      <main className="w-full max-w-[2400px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Left Column: Metrics & Controls */}
-        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
+        <div className="lg:col-span-2 space-y-8">
             
             {view === 'REPORTS' ? (
                <ReportsView allOrders={allOrders} stats={stats} />
-            ) : view === 'STATS' ? (
-               <StatsView />
             ) : view === 'SETTINGS' ? (
                <SettingsView />
             ) : (
@@ -1596,11 +1518,11 @@ const AdminDashboard = ({ user, logout }) => {
                 )}
                 
                 {fileName && !isUploading && (
-                    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
-                        <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center gap-4">
                             <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600"><FileSpreadsheet className="w-6 h-6" /></div>
-                            <div className="min-w-0">
-                                <p className="font-bold text-slate-800 truncate">{fileName}</p>
+                            <div>
+                                <p className="font-bold text-slate-800">{fileName}</p>
                                 <p className="text-xs text-slate-500 font-medium">{columnMap ? 'Headers Detected Successfully' : 'Columns not identified'}</p>
                             </div>
                         </div>
@@ -1612,8 +1534,8 @@ const AdminDashboard = ({ user, logout }) => {
                 )}
 
                 {/* Metrics Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group min-h-[140px]">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group">
                         <div className="relative z-10">
                             <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Load</p>
                             <p className="text-4xl font-bold mt-2">{grandTotal}</p>
@@ -1670,7 +1592,7 @@ const AdminDashboard = ({ user, logout }) => {
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow sm:col-span-2">
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow md:col-span-2">
                         <div className="flex items-center gap-2 mb-1">
                             <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><TrendingUp className="w-4 h-4" /></div>
                             <span className="font-bold text-slate-700 text-sm">Total Throughput</span>
@@ -1690,9 +1612,9 @@ const AdminDashboard = ({ user, logout }) => {
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         {Object.entries(portalStats).filter(([k]) => k !== 'grandTotal').map(([portal, count]) => (
-                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors text-center sm:text-left">
+                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors">
                                 <div className="text-xs font-bold uppercase text-slate-500 mb-1">{portal}</div>
-                                <div className="text-xl sm:text-2xl font-bold text-slate-800">{count}</div>
+                                <div className="text-2xl font-bold text-slate-800">{count}</div>
                             </div>
                         ))}
                     </div>
@@ -1707,9 +1629,9 @@ const AdminDashboard = ({ user, logout }) => {
             )}
         </div>
 
-        {/* Right Column: Live Feed (Desktop) / Bottom Feed (Mobile) */}
+        {/* Right Column: Live Feed */}
         <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24">
+             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-[calc(100vh-8rem)] sticky top-24">
                  <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
                          <Activity className="w-4 h-4 text-emerald-500" /> Live Activity
@@ -1764,12 +1686,8 @@ const AdminDashboard = ({ user, logout }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  // Initialize state from localStorage if available
-  const [role, setRole] = useState(() => localStorage.getItem('hv_app_role') || null);
-  const [loggedInUser, setLoggedInUser] = useState(() => {
-    const saved = localStorage.getItem('hv_app_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [role, setRole] = useState(null);
+  const [loggedInUser, setLoggedInUser] = useState(null);
 
   useEffect(() => {
     if (!auth) return;
@@ -1789,15 +1707,11 @@ export default function App() {
   const handleRoleSelection = (selectedRole, userObj) => {
       setRole(selectedRole);
       setLoggedInUser(userObj || null);
-      localStorage.setItem('hv_app_role', selectedRole);
-      if (userObj) localStorage.setItem('hv_app_user', JSON.stringify(userObj));
   };
 
   const handleLogout = () => {
       setRole(null);
       setLoggedInUser(null);
-      localStorage.removeItem('hv_app_role');
-      localStorage.removeItem('hv_app_user');
   };
 
   if (!auth) return <div className="h-screen flex items-center justify-center text-red-500">Firebase Config Error</div>;
