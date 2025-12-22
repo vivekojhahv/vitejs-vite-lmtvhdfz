@@ -28,7 +28,7 @@ import {
   ScanBarcode, Keyboard, CheckCheck, Loader2,
   Activity, Clock, Upload, FileSpreadsheet,
   TrendingUp, Users, AlertCircle, BarChart3,
-  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock, RefreshCw, FileDown
+  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock, RefreshCw, FileDown, Eye, FolderOpen
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
@@ -73,21 +73,97 @@ const formatDate = (timestamp) => {
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+// --- GLOBAL STYLES (LAYOUT FIX) ---
+const GlobalStyles = () => (
+  <style>{`
+    html, body, #root {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #F8FAFC; /* slate-50 */
+    }
+  `}</style>
+);
+
+// --- LAYOUT COMPONENT ---
+const DashboardLayout = ({ title, user, logout, currentTab, setTab, tabs, children }) => {
+  return (
+    <>
+      <GlobalStyles />
+      <div className="flex flex-col h-[100dvh] w-screen bg-slate-50 text-slate-900 overflow-hidden">
+        {/* Header */}
+        <header className="flex-none h-16 bg-white border-b border-slate-200 z-50 flex items-center justify-between px-4 sm:px-6 shadow-sm">
+          <div className="flex items-center gap-3 overflow-hidden">
+             <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-sm flex-shrink-0">
+               <Package className="w-5 h-5" />
+             </div>
+             <div className="min-w-0">
+               <h1 className="text-lg font-bold text-slate-800 leading-none truncate">{title}</h1>
+               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">{user?.name || 'User'}</div>
+             </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+             {/* Desktop Navigation */}
+             {tabs && (
+               <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                 {tabs.map(tab => (
+                   <button 
+                     key={tab.id}
+                     onClick={() => setTab(tab.id)}
+                     className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${currentTab === tab.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+                   >
+                     <tab.icon className="w-4 h-4" />
+                     {tab.label}
+                   </button>
+                 ))}
+               </nav>
+             )}
+             <button onClick={logout} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                <LogOut className="w-5 h-5" />
+             </button>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative w-full scroll-smooth">
+           <div className="max-w-[1600px] mx-auto p-4 sm:p-6 pb-24 md:pb-6 min-h-full">
+              {children}
+           </div>
+        </main>
+
+        {/* Mobile Bottom Nav */}
+        {tabs && (
+          <nav className="md:hidden flex-none h-16 bg-white border-t border-slate-200 z-50 flex justify-around items-center px-1 safe-area-pb">
+             {tabs.map(tab => (
+               <button 
+                 key={tab.id}
+                 onClick={() => setTab(tab.id)}
+                 className={`flex flex-col items-center justify-center w-full h-full gap-1 ${currentTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                 <tab.icon className={`w-6 h-6 transition-transform ${currentTab === tab.id ? '-translate-y-0.5' : ''}`} />
+                 <span className="text-[10px] font-bold">{tab.label}</span>
+               </button>
+             ))}
+          </nav>
+        )}
+      </div>
+    </>
+  );
+};
+
 // --- COMPONENTS ---
 
-const PickModal = ({ isOpen, onClose, onConfirm, order }) => {
+const PickModal = ({ isOpen, onClose, onConfirm, order, role }) => {
   const [pickQty, setPickQty] = useState('');
   const inputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && order) {
       setPickQty(order.quantity); 
-      setTimeout(() => {
-        if(inputRef.current) {
-            inputRef.current.focus();
-            inputRef.current.select();
-        }
-      }, 50);
+      setTimeout(() => { if(inputRef.current) { inputRef.current.focus(); inputRef.current.select(); }}, 50);
     }
   }, [isOpen, order]);
 
@@ -96,44 +172,43 @@ const PickModal = ({ isOpen, onClose, onConfirm, order }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     const val = parseInt(pickQty);
-    if (!isNaN(val) && val > 0 && val <= order.quantity) {
-        onConfirm(val);
-    } else {
-        const input = inputRef.current;
-        if (input) {
-          input.classList.add('animate-shake');
-          setTimeout(() => input.classList.remove('animate-shake'), 500);
-        }
-    }
+    if (!isNaN(val) && val > 0 && val <= order.quantity) { onConfirm(val); }
   };
 
+  let buttonText = "Confirm Pick";
+  let buttonColor = "bg-blue-600 hover:bg-blue-700";
+  
+  if (role === 'WIP_FLOOR') {
+      if (order.status === 'PENDING') { buttonText = "Start Process"; buttonColor = "bg-amber-500 hover:bg-amber-600"; }
+      else if (order.status === 'WIP_PROCESSING') { buttonText = "Finish Process"; buttonColor = "bg-green-600 hover:bg-green-700"; }
+  }
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[320px] sm:max-w-sm overflow-hidden transform transition-all scale-100">
-        <div className="bg-slate-50 p-6 border-b border-slate-100 text-center">
-          <h3 className="text-xl font-bold text-slate-800">Confirm Picking</h3>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1 break-all">SKU: <span className="font-mono font-bold text-slate-700">{order.sku}</span></p>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden scale-100">
+        <div className="bg-slate-50 p-6 text-center border-b border-slate-100">
+            <h3 className="text-xl font-bold text-slate-800">{role === 'WIP_FLOOR' ? 'Process Item' : 'Confirm Pick'}</h3>
+            <p className="text-slate-500 text-sm mt-1 break-all">SKU: <span className="font-mono font-bold text-slate-900">{order.sku}</span></p>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col items-center">
-          <p className="text-slate-600 mb-4 font-medium">How many units?</p>
-          <div className="flex items-center gap-4 mb-6 w-full">
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="flex justify-center mb-6">
             <input 
                 ref={inputRef}
                 type="number"
                 min="1"
                 max={order.quantity}
-                className="w-full text-center text-4xl sm:text-5xl font-bold text-blue-600 border-b-2 border-blue-200 focus:border-blue-600 outline-none pb-2 bg-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-32 text-center text-5xl font-bold text-indigo-600 border-b-2 border-indigo-200 focus:border-indigo-600 outline-none bg-transparent"
                 value={pickQty}
                 onChange={(e) => setPickQty(e.target.value)}
             />
           </div>
-          <div className="w-full bg-slate-100 rounded-lg p-3 text-center mb-4">
-             <p className="text-xs text-slate-500">Total Available: <strong>{order.quantity}</strong></p>
+          <div className="text-center mb-6 text-sm text-slate-400 font-medium uppercase tracking-wide">
+             Total Quantity: {order.quantity}
           </div>
-          <div className="grid grid-cols-2 gap-3 w-full">
-            <button type="button" onClick={onClose} className="py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition">Cancel</button>
-            <button type="submit" className="py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200">
-                Confirm
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={onClose} className="py-3.5 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancel</button>
+            <button type="submit" className={`py-3.5 text-white font-bold rounded-xl transition-all shadow-lg ${buttonColor}`}>
+                {buttonText}
             </button>
           </div>
         </form>
@@ -142,8 +217,127 @@ const PickModal = ({ isOpen, onClose, onConfirm, order }) => {
   );
 };
 
-// --- AUTH COMPONENTS ---
+const CategoryDetailModal = ({ category, onClose, orders }) => {
+    const [selectedPortal, setSelectedPortal] = useState(null);
 
+    useEffect(() => { setSelectedPortal(null); }, [category]);
+
+    if (!category) return null;
+    
+    // Show ALL items (Pending + Completed) for Admin view
+    const filtered = orders.filter(o => o.category === category);
+    
+    let content;
+    if (category === 'FG_STORE') {
+        const grouped = {};
+        filtered.forEach(o => {
+            let p = o.portal || 'All Stock'; 
+            if(p === 'General' || p === 'General Stock') p = 'All Stock';
+            if(!grouped[p]) grouped[p] = [];
+            grouped[p].push(o);
+        });
+        
+        const sortedPortals = Object.entries(grouped).sort((a,b) => {
+            if(a[0] === 'All Stock') return -1;
+            if(b[0] === 'All Stock') return 1;
+            return a[0].localeCompare(b[0]);
+        });
+
+        if (selectedPortal) {
+             const items = grouped[selectedPortal] || [];
+             content = (
+                 <div className="h-full flex flex-col animate-in slide-in-from-right-4 fade-in">
+                     <button onClick={() => setSelectedPortal(null)} className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 px-1 flex-none"><ArrowLeft className="w-4 h-4" /> Back to Portals</button>
+                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+                         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center flex-none">
+                             <span className="font-bold text-slate-800 flex gap-2 items-center"><Globe className="w-4 h-4 text-blue-500"/> {selectedPortal}</span>
+                             <span className="text-xs bg-white px-2 py-1 rounded border border-slate-200 font-mono text-slate-500">{items.reduce((a,b)=>a+(b.quantity||0),0)} units</span>
+                         </div>
+                         <div className="overflow-y-auto flex-1">
+                             <table className="w-full text-sm text-left">
+                                 <thead className="text-xs text-slate-500 uppercase bg-white border-b sticky top-0 z-10"><tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3 text-right">Qty</th><th className="px-4 py-3 text-center">Status</th></tr></thead>
+                                 <tbody className="divide-y divide-slate-100">
+                                     {items.map((o, i) => (
+                                         <tr key={i} className="hover:bg-slate-50">
+                                             <td className="px-4 py-3"><div className="font-mono font-bold text-slate-700">{o.sku}</div>{o.fgSku && <div className="text-[10px] text-emerald-600 mt-0.5">FG: {o.fgSku}</div>}</td>
+                                             <td className="px-4 py-3 text-right font-bold">{o.quantity}</td>
+                                             <td className="px-4 py-3 text-center"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${o.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>{o.status}</span></td>
+                                         </tr>
+                                     ))}
+                                 </tbody>
+                             </table>
+                         </div>
+                     </div>
+                 </div>
+             );
+        } else {
+            content = (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-8">
+                    {sortedPortals.map(([portal, items]) => (
+                        <button key={portal} onClick={() => setSelectedPortal(portal)} className="bg-white border border-slate-200 p-5 rounded-xl hover:border-indigo-400 hover:shadow-md transition-all text-left group h-32 flex flex-col justify-between">
+                            <div className="flex justify-between items-start"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100"><Globe className="w-5 h-5"/></div><ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500"/></div>
+                            <div><div className="font-bold text-slate-700 truncate">{portal}</div><div className="text-xs text-slate-500">{items.reduce((a,b)=>a+b.quantity,0)} Units</div></div>
+                        </button>
+                    ))}
+                    {sortedPortals.length === 0 && <div className="col-span-full text-center text-slate-400 py-10">No Items Found</div>}
+                </div>
+            );
+        }
+        
+    } else {
+        content = (
+             <div className="overflow-x-auto border rounded-xl shadow-sm bg-white h-full flex flex-col">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b sticky top-0 z-10">
+                        <tr>
+                            <th className="px-4 py-3">Master SKU</th>
+                            <th className="px-4 py-3 text-right">Qty</th>
+                            <th className="px-4 py-3 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {filtered.map((order, idx) => (
+                            <tr key={order.id || idx} className="hover:bg-slate-50">
+                                <td className="px-4 py-3">
+                                    <div className="font-mono font-bold text-slate-700">{order.sku}</div>
+                                    {category === 'SFG_STORE' && order.sfgSku && <div className="text-xs text-amber-600 font-mono mt-0.5">SFG: {order.sfgSku}</div>}
+                                </td>
+                                <td className="px-4 py-3 text-right font-bold text-slate-700">{order.quantity}</td>
+                                <td className="px-4 py-3 text-center">
+                                    <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${order.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : (order.status === 'WIP_PROCESSING' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800')}`}>
+                                        {order.status === 'COMPLETED' ? 'DONE' : (order.status === 'WIP_PROCESSING' ? 'PROCESS' : 'PENDING')}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                        {filtered.length === 0 && <tr><td colSpan="3" className="px-4 py-8 text-center text-slate-400 italic">No items found.</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white flex-none">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        {category === 'FG_STORE' ? <Package className="w-5 h-5 text-emerald-500"/> : 
+                         category === 'SFG_STORE' ? <Truck className="w-5 h-5 text-amber-500"/> : 
+                         <Hammer className="w-5 h-5 text-rose-500"/>}
+                        {category === 'FG_STORE' ? 'Finished Goods' : category === 'SFG_STORE' ? 'Semi-Finished' : 'WIP Floor'} Details
+                    </h3>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X className="w-6 h-6 text-slate-400 hover:text-slate-600" /></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                    {content}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// 3. Login Modal
 const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [users, setUsers] = useState([]);
@@ -154,7 +348,6 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   useEffect(() => {
     if (isOpen && role !== 'ADMIN') {
         setLoading(true);
-        // Fetch users for this role
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
         getDocs(q).then(snap => {
             const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -259,6 +452,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   );
 };
 
+// 4. SKU Mapping Modal
 const SkuMappingModal = ({ isOpen, onClose }) => {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -296,6 +490,10 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
 
     const processMappingFile = async () => {
         if (!file) return;
+        if (!window.XLSX) {
+             alert("System still initializing. Please try again.");
+             return;
+        }
         setUploading(true);
         const reader = new FileReader();
         reader.onload = async (evt) => {
@@ -337,7 +535,7 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
                     uploadedAt: serverTimestamp(),
                     uploadedBy: 'Admin',
                     rowCount: rawData.length,
-                    rawData: JSON.stringify(rawData) // Storing stringified JSON to reconstruct later
+                    rawData: JSON.stringify(rawData) 
                 });
 
                 await batch.commit();
@@ -487,6 +685,7 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
     );
 };
 
+// 5. Settings View
 const SettingsView = () => {
     const [staff, setStaff] = useState([]);
     const [newName, setNewName] = useState('');
@@ -639,6 +838,7 @@ const SettingsView = () => {
     );
 };
 
+// 6. Reports View
 const ReportsView = ({ allOrders, stats }) => {
   const pendingTasks = stats.fg + stats.sfg + stats.wip;
   const isLocked = pendingTasks > 0;
@@ -769,7 +969,7 @@ const ReportsView = ({ allOrders, stats }) => {
   );
 };
 
-// ... StatsView (kept unchanged) ...
+// 7. Stats View
 const StatsView = () => {
     const [history, setHistory] = useState([]);
     const [filter, setFilter] = useState(7); // Default to 7 days
@@ -932,6 +1132,232 @@ const StatsView = () => {
     );
 };
 
+// ... AdminDashboard, RoleSelection, App components follow ...
+const AdminDashboard = ({ user, logout }) => {
+  const [view, setView] = useState('DASHBOARD'); // 'DASHBOARD' | 'REPORTS' | 'SETTINGS' | 'STATS'
+  const [stats, setStats] = useState({ fg: 0, sfg: 0, wip: 0, totalFgDay: 0, totalSfgDay: 0, totalWipDay: 0, completedUnits: 0 });
+  const [portalStats, setPortalStats] = useState({ grandTotal: 0 });
+  const [recentCompleted, setRecentCompleted] = useState([]);
+  const [allOrders, setAllOrders] = useState([]); // Store all orders for reports
+  const [grandTotal, setGrandTotal] = useState(0); 
+  const [isUploading, setIsUploading] = useState(false);
+  const [parsedData, setParsedData] = useState([]);
+  const [fileName, setFileName] = useState('');
+  const [columnMap, setColumnMap] = useState(null); 
+  const [detailCategory, setDetailCategory] = useState(null); // 'FG_STORE' | 'SFG_STORE' | 'WIP_FLOOR'
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (!user || !db) return;
+    
+    // Stats Summary Listener
+    const statsRef = doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary');
+    const unsubStats = onSnapshot(statsRef, (docSnap) => {
+        if (docSnap.exists()) setGrandTotal(docSnap.data().grandTotal || 0);
+    });
+    
+    // Main Orders Listener
+    const ordersQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+    const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
+      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAllOrders(orders); // Save full list for reports
+      
+      const calcStats = (cat) => ({
+         pending: orders.filter(o => o.category === cat && o.status === 'PENDING').reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0),
+         total: orders.filter(o => o.category === cat).reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0)
+      });
+
+      const fg = calcStats('FG_STORE');
+      const sfg = calcStats('SFG_STORE');
+      const wip = calcStats('WIP_FLOOR');
+      
+      const completedCount = orders.filter(o => o.status === 'COMPLETED').reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0);
+
+      setStats({
+        fg: fg.pending, sfg: sfg.pending, wip: wip.pending,
+        totalFgDay: fg.total, totalSfgDay: sfg.total, totalWipDay: wip.total,
+        completedUnits: completedCount
+      });
+
+      // Recent Completed List (for Live View)
+      const completedList = orders
+        .filter(o => o.status === 'COMPLETED')
+        .sort((a, b) => {
+            const timeA = a.pickedAt?.seconds || 0;
+            const timeB = b.pickedAt?.seconds || 0;
+            return timeB - timeA;
+        })
+        .slice(0, 50);
+      setRecentCompleted(completedList);
+
+      const livePortals = { ajio: 0, nykaa: 0, flipkart: 0, amazon: 0, myntra: 0, firstcry: 0, website: 0 };
+      orders.forEach(order => {
+        if(order.status === 'PENDING' && order.category === 'FG_STORE' && order.portal) {
+           const p = order.portal.toLowerCase();
+           if (livePortals[p] !== undefined) livePortals[p] += (parseInt(order.quantity) || 0);
+        }
+      });
+      setPortalStats(prev => ({ ...livePortals, grandTotal: grandTotal })); 
+    });
+    return () => { unsubStats(); unsubOrders(); };
+  }, [user, grandTotal]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]], { header: 1 });
+      setParsedData(data);
+      
+      // Auto-detect headers
+      let headerRowIndex = -1;
+      let colIndices = { sku: -1, fg: -1, sfg: -1, wip: -1, ajio: -1, nykaa: -1, flipkart: -1, amazon: -1, myntra: -1, firstcry: -1, website: -1, grandTotal: -1 };
+      let maxScore = 0;
+
+      for (let i = 0; i < Math.min(data.length, 10); i++) {
+          const row = (data[i] || []).map(c => String(c || '').toLowerCase().trim());
+          let score = 0;
+          let ci = { ...colIndices };
+          const skuIdx = row.findIndex(c => c === 'mastersku' || c === 'master sku');
+          if (skuIdx !== -1) { score += 5; ci.sku = skuIdx; }
+          if (row.findIndex(c => c.includes('fg') && c.includes('sku')) !== -1) ci.fgSku = row.findIndex(c => c.includes('fg') && c.includes('sku'));
+          else if (row.findIndex(c => c.includes('fg') && c.includes('code')) !== -1) ci.fgSku = row.findIndex(c => c.includes('fg') && c.includes('code'));
+          if (row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('sku')) !== -1) ci.sfgSku = row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('sku'));
+          else if (row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('code')) !== -1) ci.sfgSku = row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('code'));
+          if (row.findIndex(c => c.includes('finish') && c.includes('good')) !== -1) { score += 3; ci.fg = row.findIndex(c => c.includes('finish') && c.includes('good')); }
+          if (row.findIndex(c => c.includes('semi') && c.includes('finish')) !== -1) { score += 3; ci.sfg = row.findIndex(c => c.includes('semi') && c.includes('finish')); }
+          if (row.findIndex(c => c.includes('wip')) !== -1) { score += 3; ci.wip = row.findIndex(c => c.includes('wip')); }
+          if (score > maxScore) { maxScore = score; headerRowIndex = i; colIndices = ci; }
+      }
+      if (headerRowIndex !== -1) setColumnMap({ headerRowIndex, ...colIndices });
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleProcessUpload = async () => {
+    if (parsedData.length === 0 || !columnMap) return;
+    setIsUploading(true);
+    const batch = [];
+    let grandTotalSum = 0;
+    const { headerRowIndex, sku: skuIdx, fg: fgIdx, sfg: sfgIdx, wip: wipIdx, fgSku: fgSkuIdx, sfgSku: sfgSkuIdx } = columnMap;
+
+    for (let i = headerRowIndex + 1; i < parsedData.length; i++) {
+      const row = parsedData[i];
+      if (!row) continue;
+      const sku = row[skuIdx];
+      if (!sku || String(sku).toLowerCase().includes('total')) continue;
+
+      const fgAvailable = fgIdx !== -1 ? parseQty(row[fgIdx]) : 0;
+      const sfgQty = sfgIdx !== -1 ? parseQty(row[sfgIdx]) : 0;
+      const wipQty = wipIdx !== -1 ? parseQty(row[wipIdx]) : 0;
+      
+      const fgSku = fgSkuIdx && fgSkuIdx !== -1 ? String(row[fgSkuIdx]).trim() : '';
+      const sfgSku = sfgSkuIdx && sfgSkuIdx !== -1 ? String(row[sfgSkuIdx]).trim() : '';
+      const baseItem = { sku, fgSku, sfgSku };
+
+      if (sfgQty > 0) batch.push({ ...baseItem, quantity: sfgQty, category: 'SFG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: 'General' });
+      if (wipQty > 0) batch.push({ ...baseItem, quantity: wipQty, category: 'WIP_FLOOR', status: 'PENDING', createdAt: serverTimestamp(), portal: 'General' });
+
+      if (fgAvailable > 0) {
+        let remainingFg = fgAvailable;
+        const portals = ['Ajio', 'Nykaa', 'Flipkart', 'Amazon', 'Myntra', 'FirstCry', 'Website'];
+        const pIndices = [columnMap.ajio, columnMap.nykaa, columnMap.flipkart, columnMap.amazon, columnMap.myntra, columnMap.firstcry, columnMap.website];
+        
+        portals.forEach((pName, idx) => {
+            const pQty = pIndices[idx] !== -1 ? parseQty(row[pIndices[idx]]) : 0;
+            if (remainingFg > 0 && pQty > 0) {
+                const take = Math.min(remainingFg, pQty);
+                batch.push({ ...baseItem, quantity: take, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: pName });
+                remainingFg -= take;
+            }
+        });
+        if (remainingFg > 0) batch.push({ ...baseItem, quantity: remainingFg, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: 'All Stock' });
+      }
+
+      grandTotalSum += totalIdx !== -1 ? parseQty(row[totalIdx]) : 0; 
+    }
+
+    try {
+      const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders');
+      await Promise.all(batch.map(item => addDoc(collectionRef, item)));
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: grandTotalSum });
+      setParsedData([]); setFileName(''); setColumnMap(null);
+    } catch (err) { console.error(err); alert("Error uploading. Check console."); } 
+    finally { setIsUploading(false); }
+  };
+
+  const handleClearAll = async () => {
+    if(prompt("Type 'RESET' to delete all data") !== 'RESET') return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+    const snapshot = await getDocs(q);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: 0 });
+    alert("Reset Complete");
+  };
+
+  const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
+
+  return (
+    <DashboardLayout 
+        title="Admin Console" 
+        user={user} 
+        logout={logout}
+        currentTab={view}
+        setTab={setView}
+        tabs={[
+            { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
+            { id: 'REPORTS', label: 'Reports', icon: FileSpreadsheet },
+            { id: 'STATS', label: 'Stats', icon: BarChart3 },
+            { id: 'SETTINGS', label: 'Settings', icon: Settings },
+        ]}
+    >
+        <CategoryDetailModal category={detailCategory} onClose={() => setDetailCategory(null)} orders={allOrders} />
+
+        {view === 'REPORTS' && <ReportsView allOrders={allOrders} stats={stats} />}
+        {view === 'STATS' && <StatsView />}
+        {view === 'SETTINGS' && <SettingsView />}
+        
+        {view === 'DASHBOARD' && (
+            <div className="space-y-6">
+                <div className="flex justify-end gap-2">
+                    <button onClick={() => document.getElementById('file-upload').click()} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-blue-700 transition"><Upload className="w-4 h-4"/> Upload Excel</button>
+                    <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
+                </div>
+                {fileName && !isUploading && (
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center animate-in fade-in"><div className="flex items-center gap-3"><FileSpreadsheet className="w-6 h-6 text-emerald-600"/><span className="font-bold text-slate-800">{fileName}</span></div><button onClick={handleProcessUpload} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-emerald-700">Process</button></div>
+                )}
+                {isUploading && <div className="bg-blue-50 p-4 rounded-xl text-blue-700 flex items-center gap-3"><Loader2 className="animate-spin w-5 h-5"/> Processing...</div>}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group"><div className="relative z-10"><p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Load</p><p className="text-4xl font-extrabold mt-1">{grandTotal}</p></div><div className="absolute top-0 right-0 p-16 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div></div>
+                    <button onClick={() => setDetailCategory('FG_STORE')} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all text-left group"><div className="flex justify-between items-start mb-3"><div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform"><Package className="w-5 h-5" /></div><Eye className="w-4 h-4 text-slate-300 group-hover:text-emerald-500" /></div><p className="text-3xl font-bold text-slate-800">{stats.fg}</p><p className="text-xs text-slate-500 font-medium mt-1">Pending FG Units</p></button>
+                    <button onClick={() => setDetailCategory('SFG_STORE')} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-300 transition-all text-left group"><div className="flex justify-between items-start mb-3"><div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform"><Truck className="w-5 h-5" /></div><Eye className="w-4 h-4 text-slate-300 group-hover:text-amber-500" /></div><p className="text-3xl font-bold text-slate-800">{stats.sfg}</p><p className="text-xs text-slate-500 font-medium mt-1">Pending SFG Units</p></button>
+                    <button onClick={() => setDetailCategory('WIP_FLOOR')} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md hover:border-rose-300 transition-all text-left group"><div className="flex justify-between items-start mb-3"><div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl group-hover:scale-110 transition-transform"><Hammer className="w-5 h-5" /></div><Eye className="w-4 h-4 text-slate-300 group-hover:text-rose-500" /></div><p className="text-3xl font-bold text-slate-800">{stats.wip}</p><p className="text-xs text-slate-500 font-medium mt-1">Pending WIP Units</p></button>
+                    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all text-left group"><div className="flex justify-between items-start mb-3"><div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform"><TrendingUp className="w-5 h-5" /></div></div><p className="text-3xl font-bold text-slate-800">{stats.completedUnits}</p><p className="text-xs text-slate-500 font-medium mt-1">Total Completed Units</p></div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden h-[400px]">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-500" /> Live Activity Stream</h3><span className="text-xs bg-white border px-2 py-1 rounded text-slate-500">{recentCompleted.length} recent</span></div>
+                    <div className="overflow-y-auto flex-1 p-0 divide-y divide-slate-50">
+                        {recentCompleted.length === 0 && <div className="text-slate-400 text-sm italic text-center py-10">No completed tasks yet.</div>}
+                        {recentCompleted.map((task) => (<div key={task.id} className="p-3 hover:bg-slate-50 flex justify-between items-center"><div><div className="font-bold text-slate-700 text-sm font-mono">{task.sku}</div><div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><User className="w-3 h-3"/> {task.pickedBy}</div></div><div className="text-right"><span className="block font-bold text-emerald-600 text-sm">+{task.quantity}</span><span className="text-[10px] text-slate-400">{formatTime(task.pickedAt)}</span></div></div>))}
+                    </div>
+                </div>
+                <div className="flex justify-end pt-4"><button onClick={handleClearAll} className="flex items-center gap-2 text-red-500 font-bold text-xs hover:bg-red-50 px-4 py-2 rounded-lg transition border border-red-200 hover:border-red-300"><AlertCircle className="w-4 h-4" /> Reset System Data</button></div>
+            </div>
+        )}
+    </DashboardLayout>
+  );
+};
+
+// 10. Role Selection Component
 const RoleSelection = ({ onSelectRole }) => {
     const [loginRole, setLoginRole] = useState(null);
 
@@ -988,6 +1414,7 @@ const RoleSelection = ({ onSelectRole }) => {
     );
 };
 
+// 11. Staff Dashboard
 const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1052,75 +1479,49 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   };
 
   const initiateMarkOut = (order) => {
-    if (order.status === 'COMPLETED') return;
+    if (role !== 'WIP_FLOOR' && order.status === 'COMPLETED') return;
+    if (role === 'WIP_FLOOR' && order.status === 'COMPLETED') return;
+
     const qty = parseInt(order.quantity) || 0;
-    if (qty > 1) { setTargetOrder(order); setModalOpen(true); } 
-    else { completeOrder(order.id); }
-  };
-
-  const handleModalConfirm = async (pickQty) => {
-    setModalOpen(false);
-    if (!targetOrder) return;
-    if (pickQty === targetOrder.quantity) { await completeOrder(targetOrder.id); } 
-    else { await partialPick(targetOrder, pickQty); }
-    setTargetOrder(null);
-    setScanQuery('');
-  };
-
-  const processScan = (code) => {
-    setScanError(null);
-    let scannedSku = code.trim().toUpperCase();
-    if (!scannedSku) return;
-
-    let resolvedMasterSku = skuMappings[scannedSku] || scannedSku;
-
-    const relevantList = (role === 'FG_STORE' && selectedPortal) 
-        ? orders.filter(o => (o.portal || 'General') === selectedPortal) 
-        : orders;
-
-    const matchedOrder = relevantList.find(o => o.sku.trim().toUpperCase() === resolvedMasterSku);
-
-    if (matchedOrder && matchedOrder.status === 'PENDING') {
-        initiateMarkOut(matchedOrder);
-        setScanQuery('');
+    if (qty === 1) {
+         let nextStatus = 'COMPLETED';
+         if (role === 'WIP_FLOOR') {
+             if (order.status === 'PENDING') nextStatus = 'WIP_PROCESSING';
+             else if (order.status === 'WIP_PROCESSING') nextStatus = 'COMPLETED';
+         }
+         completeOrder(order.id, nextStatus);
     } else {
-        if (role === 'FG_STORE' && !selectedPortal) {
-             const anyMatch = orders.find(o => o.sku.trim().toUpperCase() === resolvedMasterSku && o.status === 'PENDING');
-             if (anyMatch) {
-                 if (!selectedPortal && anyMatch.portal) setSelectedPortal(anyMatch.portal);
-                 else if (selectedPortal !== anyMatch.portal) setSelectedPortal(anyMatch.portal || 'General');
-                 setTimeout(() => initiateMarkOut(anyMatch), 100);
-             } else {
-                 setScanError(`No pending task found for: ${scannedSku}`);
-             }
-        } else {
-             setScanError(`No pending task found for: ${scannedSku}`);
-        }
-        setScanQuery('');
+         setTargetOrder(order); setModalOpen(true);
     }
   };
 
-  const handleScanKey = (e) => {
-    if (e.key === 'Enter') processScan(e.currentTarget.value);
+  const handleModalConfirm = (pickQty) => {
+    setModalOpen(false);
+    if (!targetOrder) return;
+    let nextStatus = 'COMPLETED';
+    if (role === 'WIP_FLOOR') {
+        if (targetOrder.status === 'PENDING') nextStatus = 'WIP_PROCESSING';
+        else if (targetOrder.status === 'WIP_PROCESSING') nextStatus = 'COMPLETED';
+    }
+    if (pickQty === targetOrder.quantity) completeOrder(targetOrder.id, nextStatus);
+    else partialPick(targetOrder, pickQty, nextStatus);
+    setTargetOrder(null); setScanQuery('');
   };
 
-  const completeOrder = async (orderId) => {
+  const completeOrder = async (orderId, status) => {
       try {
         const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
-        await updateDoc(orderRef, { status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
+        await updateDoc(orderRef, { status: status, pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
         setScanQuery('');
       } catch (error) { console.error("Error:", error); }
   };
-
-  const partialPick = async (originalOrder, pickedQty) => {
+  const partialPick = async (originalOrder, pickedQty, status) => {
       try {
           const batch = writeBatch(db);
-          const originalRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id);
-          batch.update(originalRef, { quantity: originalOrder.quantity - pickedQty });
-          const newOrderRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-          const completedOrder = { ...originalOrder, quantity: pickedQty, status: 'COMPLETED', pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() };
+          batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id), { quantity: originalOrder.quantity - pickedQty });
+          const newRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+          batch.set(newRef, { ...originalOrder, quantity: pickedQty, status: status, pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
           delete completedOrder.id;
-          batch.set(newOrderRef, completedOrder);
           await batch.commit();
       } catch (error) { console.error("Error:", error); }
   };
@@ -1136,23 +1537,35 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     const groups = {};
     orders.forEach(order => {
       if (order.status !== 'PENDING') return;
-      const portal = order.portal || 'General';
-      if (!groups[portal]) groups[portal] = { count: 0, units: 0, name: portal };
-      groups[portal].count += 1;
-      groups[portal].units += (order.quantity || 0);
+      
+      // Default to "All Stock" if portal is undefined, null, or 'General'
+      let p = order.portal || 'All Stock';
+      if (p === 'General' || p === 'General Stock') p = 'All Stock';
+
+      if (!groups[p]) groups[p] = { count: 0, units: 0, name: p };
+      groups[p].count += 1;
+      groups[p].units += (order.quantity || 0);
     });
     return groups;
   }, [orders, role]);
 
+  const sortedPortalKeys = useMemo(() => {
+     return Object.keys(portalGroups).sort((a,b) => {
+         if(a === 'All Stock') return -1;
+         if(b === 'All Stock') return 1;
+         return a.localeCompare(b);
+     });
+  }, [portalGroups]);
+
   const currentViewOrders = useMemo(() => {
-    if (role === 'FG_STORE' && selectedPortal) return orders.filter(o => (o.portal || 'General') === selectedPortal);
+    if (role === 'FG_STORE' && selectedPortal) return orders.filter(o => (o.portal || 'All Stock') === selectedPortal);
     return orders;
   }, [orders, role, selectedPortal]);
 
   const masterSkuStats = useMemo(() => {
     const stats = {};
     currentViewOrders.forEach(order => {
-        if (order.status !== 'PENDING') return;
+        if (order.status === 'COMPLETED') return;
         const master = getMasterSku(order.sku);
         if (!stats[master]) stats[master] = 0;
         stats[master] += (order.quantity || 0);
@@ -1165,8 +1578,10 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     if (selectedMasterSku) list = list.filter(o => getMasterSku(o.sku) === selectedMasterSku);
     if (scanQuery && manualMode) list = list.filter(o => o.sku.toUpperCase().includes(scanQuery.toUpperCase()));
     return list.sort((a, b) => {
-        if (a.status === b.status) return a.sku.localeCompare(b.sku);
-        return a.status === 'PENDING' ? -1 : 1;
+        const score = (s) => s === 'PENDING' ? 1 : s === 'WIP_PROCESSING' ? 2 : 3;
+        const statusDiff = score(a.status) - score(b.status);
+        if (statusDiff !== 0) return statusDiff;
+        return a.sku.localeCompare(b.sku);
     });
   }, [currentViewOrders, selectedMasterSku, scanQuery, manualMode]);
 
@@ -1189,13 +1604,15 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             {Object.values(portalGroups).length === 0 && !loading && (
                 <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">No pending orders for Finished Goods</div>
             )}
-            {Object.values(portalGroups).map((group) => (
-                <button key={group.name} onClick={() => setSelectedPortal(group.name)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group w-full">
+            {sortedPortalKeys.map((portal) => {
+                const group = portalGroups[portal];
+                return (
+                <button key={portal} onClick={() => setSelectedPortal(portal)} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition text-left relative overflow-hidden group w-full">
                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 group-hover:w-2 transition-all"></div>
-                <h3 className="text-lg font-bold text-slate-800 uppercase">{group.name}</h3>
+                <h3 className="text-lg font-bold text-slate-800 uppercase">{portal}</h3>
                 <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800">{group.units}</span><span className="text-sm text-slate-500 font-medium">units</span></div>
                 </button>
-            ))}
+            )})}
             </div>
         </div>
       </div>
@@ -1204,7 +1621,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
   return (
     <div className="min-h-screen h-[100dvh] bg-slate-50 flex flex-col font-sans overflow-hidden w-full max-w-[100vw]">
-      <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} />
+      <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} role={role} />
       
       {/* HEADER - FIXED TOP */}
       <div className={`${styles.bg} text-white p-4 shadow-lg flex-none z-20 w-full`}>
@@ -1217,7 +1634,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             <div className="flex gap-2 text-xs sm:text-sm opacity-90 truncate mt-0.5">
                 <span className="font-semibold truncate">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
                 <span className="opacity-60">|</span>
-                <span className="truncate">{displayOrders.filter(o => o.status === 'PENDING').length} Tasks</span>
+                <span className="truncate">{displayOrders.filter(o => o.status !== 'COMPLETED').length} Tasks</span>
             </div>
           </div>
           <button onClick={logout} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 shrink-0 ml-2"><LogOut className="w-5 h-5" /></button>
@@ -1233,7 +1650,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             </button>
             <div className="flex-1 flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 sm:px-3 h-10 sm:h-12">
                 <div className="mr-2">{manualMode ? <Search className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400" /> : <ScanBarcode className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 animate-pulse" />}</div>
-                <input ref={scanInputRef} type="text" placeholder={manualMode ? "Search..." : "Scan..."} className="flex-1 bg-transparent outline-none font-mono text-base sm:text-lg text-slate-800 font-bold w-full" value={scanQuery} onChange={(e) => {setScanQuery(e.target.value); if(scanError) setScanError(null);}} onKeyDown={handleScanKey} autoFocus autoComplete="off" />
+                <input ref={scanInputRef} type="text" placeholder={manualMode ? "Search..." : "Scan..."} className="flex-1 bg-transparent outline-none font-mono text-base sm:text-lg text-slate-800 font-bold w-full" value={scanQuery} onChange={(e) => {setScanQuery(e.target.value); if(scanError) setScanError(null);}} onKeyDown={e => { if(e.key === 'Enter') processScan(e.currentTarget.value) }} autoFocus autoComplete="off" />
                 {scanQuery && <button onClick={() => setScanQuery('')} className="p-1 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>}
             </div>
         </div>
@@ -1270,18 +1687,21 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             )}
             {displayOrders.map(order => {
               const isCompleted = order.status === 'COMPLETED';
+              const isWipProcess = order.status === 'WIP_PROCESSING';
               
               // Resolve display code from reverse map
               const displayFG = reverseMappings[order.sku]?.FG;
               const displaySFG = reverseMappings[order.sku]?.SFG;
 
               return (
-                <div key={order.id} className={`p-4 rounded-xl border shadow-sm transition-all duration-200 flex flex-col justify-between h-full ${isCompleted ? 'bg-emerald-50/50 border-emerald-100 opacity-60' : 'bg-white border-slate-200 hover:shadow-md hover:border-blue-300'}`}>
+                <div key={order.id} className={`p-4 rounded-xl border shadow-sm transition-all duration-200 flex flex-col justify-between h-full ${isCompleted ? 'bg-emerald-50/50 border-emerald-100 opacity-60' : (isWipProcess ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:shadow-md hover:border-blue-300')}`}>
                   
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1 min-w-0 pr-2">
                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isCompleted ? 'COMPLETED' : (order.portal || 'Standard')}</span>
+                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : (isWipProcess ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')}`}>
+                              {isCompleted ? 'COMPLETED' : (isWipProcess ? 'IN PROCESS' : (order.portal || 'Standard'))}
+                          </span>
                           <span className="text-[10px] text-slate-400 font-medium">{getMasterSku(order.sku)}</span>
                        </div>
                        <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
@@ -1295,6 +1715,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
                        )}
                     </div>
                     {isCompleted && <CheckCheck className="w-6 h-6 text-emerald-500" />}
+                    {isWipProcess && <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />}
                   </div>
 
                   <div className="flex items-end justify-between pt-2 border-t border-slate-50 mt-auto">
@@ -1304,8 +1725,11 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
                     </div>
                     
                     {!isCompleted && (
-                        <button onClick={() => initiateMarkOut(order)} className={`px-4 py-3 sm:py-2 rounded-lg font-bold text-sm transition active:scale-95 flex items-center gap-2 ${styles.btn} border bg-white hover:bg-slate-50 shadow-sm`}>
-                            Pick Item <ArrowLeft className="w-4 h-4 rotate-180" />
+                        <button 
+                            onClick={() => initiateMarkOut(order)} 
+                            className={`px-4 py-3 sm:py-2 rounded-lg font-bold text-sm transition active:scale-95 flex items-center gap-2 ${isWipProcess ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border hover:bg-slate-50 text-slate-700'} shadow-sm`}
+                        >
+                            {isWipProcess ? 'Finish' : 'Pick Item'} <ArrowLeft className="w-4 h-4 rotate-180" />
                         </button>
                     )}
                   </div>
@@ -1314,452 +1738,6 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             })}
         </div>
       </div>
-    </div>
-  );
-};
-
-// ... AdminDashboard, SettingsView, ReportsView, StatsView (kept unchanged) ...
-const AdminDashboard = ({ user, logout }) => {
-  const [view, setView] = useState('DASHBOARD'); // 'DASHBOARD' | 'REPORTS' | 'SETTINGS' | 'STATS'
-  const [stats, setStats] = useState({ fg: 0, sfg: 0, wip: 0, totalFgDay: 0, totalSfgDay: 0, totalWipDay: 0, completedUnits: 0 });
-  const [portalStats, setPortalStats] = useState({ grandTotal: 0 });
-  const [recentCompleted, setRecentCompleted] = useState([]);
-  const [allOrders, setAllOrders] = useState([]); // Store all orders for reports
-  const [grandTotal, setGrandTotal] = useState(0); 
-  const [isUploading, setIsUploading] = useState(false);
-  const [parsedData, setParsedData] = useState([]);
-  const [fileName, setFileName] = useState('');
-  const [columnMap, setColumnMap] = useState(null); 
-  const [mappingModalOpen, setMappingModalOpen] = useState(false);
-
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
-
-  useEffect(() => {
-    if (!user || !db) return;
-    
-    // Stats Summary Listener
-    const statsRef = doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary');
-    const unsubStats = onSnapshot(statsRef, (docSnap) => {
-        if (docSnap.exists()) setGrandTotal(docSnap.data().grandTotal || 0);
-    });
-    
-    // Main Orders Listener
-    const ordersQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-    const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
-      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAllOrders(orders); // Save full list for reports
-      
-      const calcStats = (cat) => ({
-         pending: orders.filter(o => o.category === cat && o.status === 'PENDING').reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0),
-         total: orders.filter(o => o.category === cat).reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0)
-      });
-
-      const fg = calcStats('FG_STORE');
-      const sfg = calcStats('SFG_STORE');
-      const wip = calcStats('WIP_FLOOR');
-      
-      setStats({
-        fg: fg.pending, sfg: sfg.pending, wip: wip.pending,
-        totalFgDay: fg.total, totalSfgDay: sfg.total, totalWipDay: wip.total,
-        completedUnits: orders.filter(o => o.status === 'COMPLETED').reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0)
-      });
-
-      // Recent Completed List (for Live View)
-      const completedList = orders
-        .filter(o => o.status === 'COMPLETED')
-        .sort((a, b) => {
-            const timeA = a.pickedAt?.seconds || 0;
-            const timeB = b.pickedAt?.seconds || 0;
-            return timeB - timeA;
-        })
-        .slice(0, 50);
-      setRecentCompleted(completedList);
-
-      const livePortals = { ajio: 0, nykaa: 0, flipkart: 0, amazon: 0, myntra: 0, firstcry: 0, website: 0 };
-      orders.forEach(order => {
-        if(order.status === 'PENDING' && order.category === 'FG_STORE' && order.portal) {
-           const p = order.portal.toLowerCase();
-           if (livePortals[p] !== undefined) livePortals[p] += (parseInt(order.quantity) || 0);
-        }
-      });
-      setPortalStats(prev => ({ ...livePortals, grandTotal: grandTotal })); 
-    });
-    return () => { unsubStats(); unsubOrders(); };
-  }, [user, grandTotal]);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const data = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]], { header: 1 });
-      setParsedData(data);
-      
-      // Auto-detect headers
-      let headerRowIndex = -1;
-      let colIndices = { sku: -1, fg: -1, sfg: -1, wip: -1, ajio: -1, nykaa: -1, flipkart: -1, amazon: -1, myntra: -1, firstcry: -1, website: -1, grandTotal: -1 };
-      let maxScore = 0;
-
-      for (let i = 0; i < Math.min(data.length, 10); i++) {
-          const row = (data[i] || []).map(c => String(c || '').toLowerCase().trim());
-          let score = 0;
-          let ci = { ...colIndices };
-          const skuIdx = row.findIndex(c => c === 'mastersku' || c === 'master sku');
-          if (skuIdx !== -1) { score += 5; ci.sku = skuIdx; }
-          if (row.findIndex(c => c.includes('finish') && c.includes('good')) !== -1) { score += 3; ci.fg = row.findIndex(c => c.includes('finish') && c.includes('good')); }
-          if (row.findIndex(c => c.includes('semi') && c.includes('finish')) !== -1) { score += 3; ci.sfg = row.findIndex(c => c.includes('semi') && c.includes('finish')); }
-          if (row.findIndex(c => c.includes('wip')) !== -1) { score += 3; ci.wip = row.findIndex(c => c.includes('wip')); }
-          if (row.findIndex(c => c === 'grand total') !== -1) { score += 3; ci.grandTotal = row.findIndex(c => c === 'grand total'); }
-          if (row.findIndex(c => c === 'ajio') !== -1) ci.ajio = row.findIndex(c => c === 'ajio');
-          if (row.findIndex(c => c.includes('nykaa')) !== -1) ci.nykaa = row.findIndex(c => c.includes('nykaa'));
-          if (row.findIndex(c => c.includes('flipkart')) !== -1) ci.flipkart = row.findIndex(c => c.includes('flipkart'));
-          if (row.findIndex(c => c.includes('amazon')) !== -1) ci.amazon = row.findIndex(c => c.includes('amazon'));
-          if (row.findIndex(c => c.includes('myntra')) !== -1) ci.myntra = row.findIndex(c => c.includes('myntra'));
-          if (row.findIndex(c => c.includes('firstcry')) !== -1) ci.firstcry = row.findIndex(c => c.includes('firstcry'));
-          if (row.findIndex(c => c.includes('website')) !== -1) ci.website = row.findIndex(c => c.includes('website'));
-
-          if (score > maxScore) { maxScore = score; headerRowIndex = i; colIndices = ci; }
-      }
-      if (headerRowIndex !== -1) setColumnMap({ headerRowIndex, ...colIndices });
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const handleProcessUpload = async () => {
-    if (parsedData.length === 0 || !columnMap) return;
-    setIsUploading(true);
-    const batch = [];
-    let grandTotalSum = 0;
-    const { headerRowIndex, sku: skuIdx, fg: fgIdx, sfg: sfgIdx, wip: wipIdx, grandTotal: totalIdx } = columnMap;
-
-    for (let i = headerRowIndex + 1; i < parsedData.length; i++) {
-      const row = parsedData[i];
-      if (!row) continue;
-      const sku = row[skuIdx];
-      if (!sku || String(sku).toLowerCase().includes('total')) continue;
-
-      const fgAvailable = fgIdx !== -1 ? parseQty(row[fgIdx]) : 0;
-      const sfgQty = sfgIdx !== -1 ? parseQty(row[sfgIdx]) : 0;
-      const wipQty = wipIdx !== -1 ? parseQty(row[wipIdx]) : 0;
-
-      if (sfgQty > 0) batch.push({ sku, quantity: sfgQty, category: 'SFG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: 'General' });
-      if (wipQty > 0) batch.push({ sku, quantity: wipQty, category: 'WIP_FLOOR', status: 'PENDING', createdAt: serverTimestamp(), portal: 'General' });
-
-      if (fgAvailable > 0) {
-        let remainingFg = fgAvailable;
-        const portals = ['Ajio', 'Nykaa', 'Flipkart', 'Amazon', 'Myntra', 'FirstCry', 'Website'];
-        const pIndices = [columnMap.ajio, columnMap.nykaa, columnMap.flipkart, columnMap.amazon, columnMap.myntra, columnMap.firstcry, columnMap.website];
-        
-        portals.forEach((pName, idx) => {
-            const pQty = pIndices[idx] !== -1 ? parseQty(row[pIndices[idx]]) : 0;
-            if (remainingFg > 0 && pQty > 0) {
-                const take = Math.min(remainingFg, pQty);
-                batch.push({ sku, quantity: take, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: pName });
-                remainingFg -= take;
-            }
-        });
-        if (remainingFg > 0) batch.push({ sku, quantity: remainingFg, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: 'General Stock' });
-      }
-
-      grandTotalSum += totalIdx !== -1 ? parseQty(row[totalIdx]) : 0; 
-    }
-
-    try {
-      const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders');
-      await Promise.all(batch.map(item => addDoc(collectionRef, item)));
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: grandTotalSum });
-      setParsedData([]); setFileName(''); setColumnMap(null);
-    } catch (err) { console.error(err); alert("Error uploading. Check console."); } 
-    finally { setIsUploading(false); }
-  };
-
-  const handleClearAll = async () => {
-    if(prompt("Type 'RESET' to delete all data") !== 'RESET') return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-    const snapshot = await getDocs(q);
-    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
-    await Promise.all(deletePromises);
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: 0 });
-    alert("Reset Complete");
-  };
-
-  const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 text-slate-900">
-      
-      {/* Modern Header */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between shadow-sm transition-all duration-300">
-         <div className="flex items-center gap-3 sm:gap-6 mb-2 sm:mb-0 w-full sm:w-auto justify-between sm:justify-start">
-             <div className="flex items-center gap-3">
-               <div className="p-2 bg-slate-900 rounded-lg"><LayoutDashboard className="w-5 h-5 text-white" /></div>
-               <div>
-                  <h1 className="text-xl font-bold text-slate-900 leading-none">Admin Console</h1>
-                  <p className="text-xs text-slate-500 font-medium mt-1">Warehouse Operations</p>
-               </div>
-             </div>
-             
-             {/* Navigation Tabs */}
-             <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
-                <button 
-                  onClick={() => setView('DASHBOARD')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Dashboard
-                </button>
-                <button 
-                  onClick={() => setView('REPORTS')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'REPORTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <FileSpreadsheet className="w-4 h-4" /> <span className="hidden md:inline">Reports</span>
-                </button>
-                <button 
-                  onClick={() => setView('STATS')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'STATS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <BarChart3 className="w-4 h-4" /> <span className="hidden md:inline">Stats</span>
-                </button>
-                <button 
-                  onClick={() => setView('SETTINGS')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${view === 'SETTINGS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <Settings className="w-4 h-4" /> <span className="hidden md:inline">Settings</span>
-                </button>
-             </div>
-         </div>
-
-         {/* Mobile Navigation Tabs */}
-         <div className="flex sm:hidden w-full bg-slate-100 p-1 rounded-xl mb-3 overflow-x-auto justify-between">
-            <button 
-                onClick={() => setView('DASHBOARD')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'DASHBOARD' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Dash
-            </button>
-            <button 
-                onClick={() => setView('REPORTS')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'REPORTS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Reports
-            </button>
-            <button 
-                onClick={() => setView('STATS')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'STATS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Stats
-            </button>
-            <button 
-                onClick={() => setView('SETTINGS')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${view === 'SETTINGS' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-                Settings
-            </button>
-         </div>
-
-         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {view === 'DASHBOARD' && (
-              <button onClick={() => document.getElementById('file-upload').click()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm font-medium bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-95">
-                  <Upload className="w-4 h-4" />
-                  <span>Upload Excel</span>
-              </button>
-            )}
-            <button onClick={logout} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-red-500">
-                <LogOut className="w-5 h-5" />
-            </button>
-         </div>
-         <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
-      </header>
-
-      <main className="w-full max-w-[2400px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-        
-        {/* Left Column: Metrics & Controls */}
-        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
-            
-            {view === 'REPORTS' ? (
-               <ReportsView allOrders={allOrders} stats={stats} />
-            ) : view === 'STATS' ? (
-               <StatsView />
-            ) : view === 'SETTINGS' ? (
-               <SettingsView />
-            ) : (
-               <>
-                {/* Upload Status */}
-                {isUploading && (
-                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-center gap-3 text-blue-700 animate-pulse">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span className="font-bold">Processing Order File... This may take a moment.</span>
-                    </div>
-                )}
-                
-                {fileName && !isUploading && (
-                    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in fade-in slide-in-from-top-4">
-                        <div className="flex items-center gap-4 w-full sm:w-auto">
-                            <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600"><FileSpreadsheet className="w-6 h-6" /></div>
-                            <div className="min-w-0">
-                                <p className="font-bold text-slate-800 truncate">{fileName}</p>
-                                <p className="text-xs text-slate-500 font-medium">{columnMap ? 'Headers Detected Successfully' : 'Columns not identified'}</p>
-                            </div>
-                        </div>
-                        <button onClick={handleProcessUpload} className="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-200">
-                            <CheckCircle2 className="w-5 h-5" />
-                            Process & Go Live
-                        </button>
-                    </div>
-                )}
-
-                {/* Metrics Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden group min-h-[140px]">
-                        <div className="relative z-10">
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Load</p>
-                            <p className="text-4xl font-bold mt-2">{grandTotal}</p>
-                            <p className="text-slate-400 text-xs mt-1">Units from Excel</p>
-                        </div>
-                        <div className="absolute right-0 top-0 p-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-all"></div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600"><Package className="w-4 h-4" /></div>
-                            <span className="font-bold text-slate-700 text-sm">FG Store</span>
-                        </div>
-                        <div>
-                            <p className="text-3xl font-bold text-slate-800">{stats.fg}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${getPercentage(stats.totalFgDay, grandTotal)}%` }}></div>
-                                </div>
-                                <span className="text-xs font-bold text-slate-400">{getPercentage(stats.totalFgDay, grandTotal)}%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-amber-50 rounded-lg text-amber-600"><Truck className="w-4 h-4" /></div>
-                            <span className="font-bold text-slate-700 text-sm">SFG Store</span>
-                        </div>
-                        <div>
-                            <p className="text-3xl font-bold text-slate-800">{stats.sfg}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${getPercentage(stats.totalSfgDay, grandTotal)}%` }}></div>
-                                </div>
-                                <span className="text-xs font-bold text-slate-400">{getPercentage(stats.totalSfgDay, grandTotal)}%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-rose-50 rounded-lg text-rose-600"><Hammer className="w-4 h-4" /></div>
-                            <span className="font-bold text-slate-700 text-sm">WIP Floor</span>
-                        </div>
-                        <div>
-                            <p className="text-3xl font-bold text-slate-800">{stats.wip}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-rose-500 rounded-full" style={{ width: `${getPercentage(stats.totalWipDay, grandTotal)}%` }}></div>
-                                </div>
-                                <span className="text-xs font-bold text-slate-400">{getPercentage(stats.totalWipDay, grandTotal)}%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow sm:col-span-2">
-                        <div className="flex items-center gap-2 mb-1">
-                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><TrendingUp className="w-4 h-4" /></div>
-                            <span className="font-bold text-slate-700 text-sm">Total Throughput</span>
-                        </div>
-                        <div className="flex items-end gap-4">
-                            <p className="text-4xl font-bold text-slate-800">{stats.completedUnits}</p>
-                            <p className="text-slate-400 text-sm font-medium mb-2">units picked & processed</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Portal Stats */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Globe className="w-5 h-5 text-blue-500" />
-                        Portal Pending (Live)
-                    </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        {Object.entries(portalStats).filter(([k]) => k !== 'grandTotal').map(([portal, count]) => (
-                            <div key={portal} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors text-center sm:text-left">
-                                <div className="text-xs font-bold uppercase text-slate-500 mb-1">{portal}</div>
-                                <div className="text-xl sm:text-2xl font-bold text-slate-800">{count}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                
-                <div className="flex justify-end pt-4">
-                    <button onClick={handleClearAll} className="flex items-center gap-2 text-red-500 font-bold text-xs hover:bg-red-50 px-4 py-2 rounded-lg transition">
-                        <AlertCircle className="w-4 h-4" /> Reset System Data
-                    </button>
-                </div>
-               </>
-            )}
-        </div>
-
-        {/* Right Column: Live Feed (Desktop) / Bottom Feed (Mobile) */}
-        <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-96 lg:h-[calc(100vh-8rem)] lg:sticky lg:top-24">
-                 <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
-                     <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                         <Activity className="w-4 h-4 text-emerald-500" /> Live Activity
-                     </h3>
-                     <span className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full">
-                         <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                         LIVE
-                     </span>
-                 </div>
-                 
-                 <div className="overflow-y-auto flex-1 p-0 divide-y divide-slate-50 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-                     {recentCompleted.length === 0 && (
-                         <div className="p-8 text-center text-slate-400 text-sm">
-                             No activity yet today.
-                         </div>
-                     )}
-                     {recentCompleted.map((task) => (
-                         <div key={task.id} className="p-4 hover:bg-slate-50 transition-colors group">
-                             <div className="flex justify-between items-start mb-1">
-                                 <span className="text-xs font-bold text-slate-400 font-mono flex items-center gap-1">
-                                     <Clock className="w-3 h-3" /> {formatTime(task.pickedAt)}
-                                 </span>
-                                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                                     task.category === 'FG_STORE' ? 'bg-emerald-100 text-emerald-700' :
-                                     task.category === 'SFG_STORE' ? 'bg-amber-100 text-amber-700' : 
-                                     'bg-rose-100 text-rose-700'
-                                 }`}>
-                                     {task.category === 'FG_STORE' ? 'FG' : task.category === 'SFG_STORE' ? 'SFG' : 'WIP'}
-                                 </span>
-                             </div>
-                             <div className="flex justify-between items-center">
-                                 <div>
-                                     <div className="font-bold text-slate-800 text-sm font-mono">{task.sku}</div>
-                                     <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                                         <Users className="w-3 h-3" /> {task.pickedBy || 'Staff'}
-                                     </div>
-                                 </div>
-                                 <div className="text-right">
-                                     <span className="block text-lg font-bold text-emerald-600 leading-none">+{task.quantity}</span>
-                                 </div>
-                             </div>
-                         </div>
-                     ))}
-                 </div>
-             </div>
-        </div>
-
-      </main>
     </div>
   );
 };
@@ -1785,6 +1763,14 @@ export default function App() {
       // END FIX
     };
     initAuth();
+    // Load XLSX
+    if (!document.getElementById('xlsx-script')) {
+      const script = document.createElement('script');
+      script.id = 'xlsx-script';
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
     return onAuthStateChanged(auth, setUser);
   }, []);
 
