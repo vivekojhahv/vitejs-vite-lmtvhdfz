@@ -225,6 +225,7 @@ const CategoryDetailModal = ({ category, onClose, orders }) => {
 
     if (!category) return null;
     
+    // Show ALL items (Pending + Completed) for Admin view
     const filtered = orders.filter(o => o.category === category);
     
     let content;
@@ -337,64 +338,123 @@ const CategoryDetailModal = ({ category, onClose, orders }) => {
     );
 };
 
+// 3. Login Modal
 const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
-    const [password, setPassword] = useState('');
-    const [users, setUsers] = useState([]);
-    const [selectedUser, setSelectedUser] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+  const [password, setPassword] = useState('');
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-    useEffect(() => {
-        if (isOpen && role !== 'ADMIN') {
-            setLoading(true);
-            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
-            getDocs(q).then(snap => {
-                setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                setLoading(false);
-            });
-        }
-    }, [isOpen, role]);
+  useEffect(() => {
+    if (isOpen && role !== 'ADMIN') {
+        setLoading(true);
+        // Fetch users for this role
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
+        getDocs(q).then(snap => {
+            const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setUsers(staffList);
+            setLoading(false);
+        });
+    }
+  }, [isOpen, role]);
 
-    const handleLogin = (e) => {
-        e.preventDefault();
-        if (role === 'ADMIN') {
-            if (password === 'HV@2026') onLoginSuccess({ name: 'Administrator', role: 'ADMIN' });
-            else setError('Incorrect Admin Password');
-        } else {
-            const user = users.find(u => u.id === selectedUser);
-            if (user && user.password === password) onLoginSuccess(user);
-            else setError('Invalid Password');
-        }
-    };
+  const handleAdminLogin = (e) => {
+      e.preventDefault();
+      if (password === 'HV@2026') {
+          onLoginSuccess({ name: 'Administrator', role: 'ADMIN' });
+      } else {
+          setError('Incorrect Admin Password');
+      }
+  };
 
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
-                <h3 className="text-2xl font-bold text-slate-800 mb-6 text-center">{role === 'ADMIN' ? 'Admin Access' : 'Staff Login'}</h3>
-                <form onSubmit={handleLogin} className="space-y-4">
-                    {role !== 'ADMIN' && (
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase">Select Staff</label>
-                            <select className="w-full p-3 border rounded-xl mt-1 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" value={selectedUser} onChange={e => setSelectedUser(e.target.value)} required>
-                                <option value="">Choose Name</option>
-                                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </select>
-                        </div>
-                    )}
+  const handleStaffLogin = (e) => {
+      e.preventDefault();
+      const user = users.find(u => u.id === selectedUser);
+      if (user && user.password === password) {
+          onLoginSuccess(user);
+      } else {
+          setError('Invalid Password');
+      }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-blue-500" />
+                    {role === 'ADMIN' ? 'Admin Access' : 'Staff Login'}
+                </h3>
+                <button onClick={onClose}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+            </div>
+
+            {role === 'ADMIN' ? (
+                <form onSubmit={handleAdminLogin} className="space-y-4">
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
-                        <input type="password" className="w-full p-3 border rounded-xl mt-1 outline-none focus:ring-2 focus:ring-indigo-500" value={password} onChange={e => setPassword(e.target.value)} autoFocus />
+                        <input 
+                            type="password" 
+                            className="w-full p-3 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Enter Admin Password"
+                            autoFocus
+                        />
                     </div>
-                    {error && <p className="text-red-500 text-sm text-center font-medium bg-red-50 p-2 rounded-lg">{error}</p>}
-                    <button className="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-transform active:scale-95">Unlock Dashboard</button>
+                    {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+                    <button type="submit" className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800">
+                        Unlock Console
+                    </button>
                 </form>
-                <button onClick={onClose} className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 mt-2">Cancel</button>
-            </div>
+            ) : (
+                <form onSubmit={handleStaffLogin} className="space-y-4">
+                    {loading ? (
+                        <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /> Loading Staff...</div>
+                    ) : users.length === 0 ? (
+                        <div className="py-4 text-center text-amber-600 bg-amber-50 rounded-lg p-4">
+                            No staff found for this role. <br/>Please ask Admin to add you in Settings.
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Select Staff Member</label>
+                                <select 
+                                    className="w-full p-3 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    value={selectedUser}
+                                    onChange={(e) => setSelectedUser(e.target.value)}
+                                    required
+                                >
+                                    <option value="">-- Select Name --</option>
+                                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
+                                <input 
+                                    type="password" 
+                                    className="w-full p-3 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter Your Password"
+                                />
+                            </div>
+                            {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+                            <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700" disabled={!selectedUser}>
+                                Login to Store
+                            </button>
+                        </>
+                    )}
+                </form>
+            )}
         </div>
-    );
+    </div>
+  );
 };
 
+// 4. SKU Mapping Modal
 const SkuMappingModal = ({ isOpen, onClose }) => {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -416,10 +476,19 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
 
     const handleLogin = (e) => {
         e.preventDefault();
-        if (password === 'HV@2026') { setIsAuthenticated(true); setError(''); } 
-        else { setError('Incorrect Password'); }
+        if (password === 'HV@2026') {
+            setIsAuthenticated(true);
+            setError('');
+        } else {
+            setError('Incorrect Password');
+        }
     };
-    const handleFile = (e) => { setFile(e.target.files[0]); setError(''); setMappingStats(null); };
+
+    const handleFile = (e) => {
+        setFile(e.target.files[0]);
+        setError('');
+        setMappingStats(null);
+    };
 
     const processMappingFile = async () => {
         if (!file) return;
@@ -432,8 +501,10 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
         reader.onload = async (evt) => {
             try {
                 const rawData = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
+                
                 const batch = writeBatch(db);
                 let count = 0;
+                
                 rawData.forEach(row => {
                     const keys = Object.keys(row);
                     const masterKey = keys.find(k => k.toLowerCase().includes('master'));
@@ -442,12 +513,14 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
 
                     if (masterKey) {
                         const masterSku = String(row[masterKey]).trim();
+                        
                         if (fgKey && row[fgKey]) {
                             const fgCode = String(row[fgKey]).trim().toUpperCase();
                             const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', fgCode);
                             batch.set(ref, { masterSku: masterSku, type: 'FG' });
                             count++;
                         }
+
                         if (sfgKey && row[sfgKey]) {
                             const sfgCode = String(row[sfgKey]).trim().toUpperCase();
                             const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sku_mappings', sfgCode);
@@ -456,36 +529,53 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
                         }
                     }
                 });
+
+                // Save to history
                 const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
-                batch.set(historyRef, { fileName: file.name, uploadedAt: serverTimestamp(), uploadedBy: 'Admin', rowCount: rawData.length, rawData: JSON.stringify(rawData) });
+                batch.set(historyRef, {
+                    fileName: file.name,
+                    uploadedAt: serverTimestamp(),
+                    uploadedBy: 'Admin',
+                    rowCount: rawData.length,
+                    rawData: JSON.stringify(rawData) 
+                });
+
                 await batch.commit();
                 setMappingStats(count);
                 setFile(null);
-            } catch (err) { console.error(err); setError('Failed to process file.'); } finally { setUploading(false); }
+            } catch (err) {
+                console.error(err);
+                setError('Failed to process file. Ensure standard headers or file size under limit.');
+            } finally {
+                setUploading(false);
+            }
         };
         reader.readAsBinaryString(file);
     };
 
     const handleClearMappings = async () => {
-        if (!confirm("Delete ALL existing SKU mappings?")) return;
+        if (!confirm("Are you sure you want to delete ALL existing SKU mappings? This cannot be undone and will break scanning for mapped items.")) return;
         setUploading(true);
         try {
             const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
             const snapshot = await getDocs(q);
             const batch = writeBatch(db);
-            snapshot.docs.forEach((doc) => { batch.delete(doc.ref); });
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
             await batch.commit();
-            alert("All mappings cleared.");
-        } catch(e) { alert("Error clearing mappings."); } finally { setUploading(false); }
+            alert("All mappings cleared successfully.");
+        } catch(e) {
+            console.error(e);
+            alert("Error clearing mappings.");
+        } finally {
+            setUploading(false);
+        }
     };
-    
-    const downloadSampleTemplate = () => {
-        if (!window.XLSX) return;
-        const wsData = [{ "Master SKU": "ALL004_36", "FG SKU": "FG000079", "SFG SKU": "SF001130" }];
-        const ws = window.XLSX.utils.json_to_sheet(wsData);
-        const wb = window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(wb, ws, "Template");
-        window.XLSX.writeFile(wb, "SKU_Mapping_Template.xlsx");
+
+    const deleteHistoryItem = async (id) => {
+         if (!confirm("Delete this history record?")) return;
+         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history', id));
     };
 
     const downloadHistoryItem = (item) => {
@@ -495,42 +585,98 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
             const wb = window.XLSX.utils.book_new();
             window.XLSX.utils.book_append_sheet(wb, ws, "Mapping");
             window.XLSX.writeFile(wb, item.fileName || 'mapping_backup.xlsx');
-        } catch (e) { alert("Error downloading file."); }
+        } catch (e) {
+            alert("Error downloading file: Data may be corrupted.");
+        }
     };
-    
-    const deleteHistoryItem = async (id) => { if (confirm("Delete history?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history', id)); };
+
+    const downloadSampleTemplate = () => {
+        const wsData = [
+            { "Master SKU": "ALL004_36", "FG SKU": "FG000079", "SFG SKU": "SF001130" },
+            { "Master SKU": "ALL005_42", "FG SKU": "FG000080", "SFG SKU": "SF001131" }
+        ];
+        const ws = window.XLSX.utils.json_to_sheet(wsData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Template");
+        window.XLSX.writeFile(wb, "SKU_Mapping_Template.xlsx");
+    };
 
     if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
                 <div className="flex justify-between items-center mb-6 flex-none">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Link className="w-5 h-5 text-indigo-500" /> SKU Mapping</h3>
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Link className="w-5 h-5 text-indigo-500" /> SKU Mapping
+                    </h3>
                     <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
                 </div>
+
                 {!isAuthenticated ? (
                     <form onSubmit={handleLogin} className="space-y-4">
-                        <input type="password" className="w-full p-3 border rounded-lg" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+                        <p className="text-sm text-slate-500">Enter Admin password to manage SKU links.</p>
+                        <input 
+                            type="password" 
+                            className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="Password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            autoFocus
+                        />
                         {error && <p className="text-red-500 text-sm">{error}</p>}
                         <button className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock</button>
                     </form>
                 ) : (
                     <div className="flex flex-col h-full overflow-hidden">
-                         <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
-                            <button onClick={() => setActiveTab('UPLOAD')} className={`flex-1 py-2 text-sm font-bold rounded-md ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>New Upload</button>
-                            <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 py-2 text-sm font-bold rounded-md ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>History</button>
+                        <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg flex-none">
+                            <button onClick={() => setActiveTab('UPLOAD')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'UPLOAD' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>New Upload</button>
+                            <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Upload History</button>
                         </div>
                         <div className="flex-1 overflow-y-auto min-h-0">
                             {activeTab === 'UPLOAD' ? (
                                 <div className="space-y-6 pt-2">
-                                    <div className="flex justify-between items-center"><p className="text-sm font-bold text-indigo-800">Upload Mapping Excel</p><button onClick={downloadSampleTemplate} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded border border-indigo-200 font-bold flex gap-1"><FileDown className="w-3 h-3"/> Template</button></div>
-                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 bg-slate-50"><input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" /><label htmlFor="mapping-upload" className="cursor-pointer block"><Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" /><span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload"}</span></label></div>
-                                    {mappingStats !== null && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">Mapped {mappingStats} codes!</div>}
-                                    <div className="flex gap-3"><button onClick={handleClearMappings} className="px-4 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200"><Trash2 className="w-5 h-5" /></button><button onClick={processMappingFile} disabled={!file || uploading} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50">{uploading ? <Loader2 className="animate-spin w-5 h-5 mx-auto" /> : 'Update Database'}</button></div>
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <p className="font-bold">How this works:</p>
+                                            <button onClick={downloadSampleTemplate} className="text-xs bg-white border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50 flex items-center gap-1 text-indigo-600 font-bold">
+                                                <FileDown className="w-3 h-3" /> Template
+                                            </button>
+                                        </div>
+                                        <p>Upload an Excel with columns for <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>.</p>
+                                        <p className="mt-2 text-xs opacity-75">Tip: Use "Clear All Mappings" below before uploading a completely new set if you want to remove old codes.</p>
+                                    </div>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-slate-50">
+                                        <input type="file" id="mapping-upload" className="hidden" onChange={handleFile} accept=".xlsx,.xls" />
+                                        <label htmlFor="mapping-upload" className="cursor-pointer block">
+                                            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                                            <span className="text-sm font-bold text-slate-600 block">{file ? file.name : "Click to Upload Mapping Excel"}</span>
+                                        </label>
+                                    </div>
+                                    {mappingStats !== null && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm text-center font-medium">Successfully mapped {mappingStats} codes!</div>}
+                                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                                    <div className="flex gap-3">
+                                        <button onClick={handleClearMappings} className="px-4 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 flex-none border border-red-200" title="Delete ALL SKU mappings to start fresh"><Trash2 className="w-5 h-5" /></button>
+                                        <button onClick={processMappingFile} disabled={!file || uploading} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                                            {uploading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Update Database'}
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="space-y-3 pt-2">
-                                    {history.map(item => (<div key={item.id} className="bg-white border p-3 rounded-lg flex justify-between items-center"><div className="min-w-0"><div className="font-bold text-sm truncate">{item.fileName}</div><div className="text-xs text-slate-400">{formatDate(item.uploadedAt)}</div></div><div className="flex gap-2"><button onClick={()=>downloadHistoryItem(item)} className="text-indigo-600"><Download className="w-4 h-4"/></button><button onClick={()=>deleteHistoryItem(item.id)} className="text-red-400"><Trash2 className="w-4 h-4"/></button></div></div>))}
+                                    {history.length === 0 && <div className="text-center text-slate-400 py-8 italic">No upload history found.</div>}
+                                    {history.map((item) => (
+                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition flex justify-between items-center group">
+                                            <div className="min-w-0 pr-4">
+                                                <div className="flex items-center gap-2 mb-1"><FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" /><span className="font-bold text-slate-700 truncate text-sm">{item.fileName}</span></div>
+                                                <div className="text-xs text-slate-400 flex items-center gap-2"><Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}</div>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => downloadHistoryItem(item)} className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition" title="Download Original File"><Download className="w-4 h-4" /></button>
+                                                <button onClick={() => deleteHistoryItem(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete History Record"><Trash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -588,31 +734,101 @@ const SettingsView = () => {
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
             <SkuMappingModal isOpen={mappingModalOpen} onClose={() => setMappingModalOpen(false)} />
+
+            {/* System Configuration Card - Moved SKU Map Button Here */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-indigo-500" /> System Configuration</h3>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-indigo-500" /> System Configuration
+                </h3>
                 <div className="flex flex-wrap gap-4">
-                     <button onClick={() => setMappingModalOpen(true)} className="flex items-center gap-3 px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition group text-left">
-                        <div className="p-2 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform"><Link className="w-5 h-5 text-indigo-600" /></div>
-                        <div><div className="font-bold text-slate-700">SKU Mapping</div><div className="text-xs text-slate-500">Manage Master/FG/SFG Links</div></div>
+                     <button 
+                        onClick={() => setMappingModalOpen(true)}
+                        className="flex items-center gap-3 px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition group text-left"
+                     >
+                        <div className="p-2 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                            <Link className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700">SKU Mapping</div>
+                            <div className="text-xs text-slate-500">Manage Master/FG/SFG Links</div>
+                        </div>
                      </button>
                 </div>
             </div>
+
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-500" /> Add New Staff</h3>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-blue-500" /> Add New Staff
+                </h3>
                 <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div><label className="text-xs font-bold text-slate-500 uppercase">Name</label><input type="text" className="w-full p-2.5 border rounded-lg mt-1 outline-none" placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} required /></div>
-                    <div><label className="text-xs font-bold text-slate-500 uppercase">Role</label><select className="w-full p-2.5 border rounded-lg mt-1 outline-none bg-white" value={newRole} onChange={(e) => setNewRole(e.target.value)}><option value="FG_STORE">Finished Goods</option><option value="SFG_STORE">Semi-Finished</option><option value="WIP_FLOOR">WIP Floor</option></select></div>
-                    <div><label className="text-xs font-bold text-slate-500 uppercase">Password</label><input type="text" className="w-full p-2.5 border rounded-lg mt-1 outline-none font-mono" placeholder="Set Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></div>
-                    <button type="submit" disabled={loading} className="p-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex justify-center items-center">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add User'}</button>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2.5 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="John Doe"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Role</label>
+                        <select 
+                            className="w-full p-2.5 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            value={newRole}
+                            onChange={(e) => setNewRole(e.target.value)}
+                        >
+                            <option value="FG_STORE">Finished Goods</option>
+                            <option value="SFG_STORE">Semi-Finished</option>
+                            <option value="WIP_FLOOR">WIP Floor</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2.5 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                            placeholder="Set Password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <button type="submit" disabled={loading} className="p-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex justify-center items-center">
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add User'}
+                    </button>
                 </form>
             </div>
+
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2"><Users className="w-5 h-5" /> Staff Directory</div>
+                <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2">
+                    <Users className="w-5 h-5" /> Staff Directory
+                </div>
                 <div className="divide-y divide-slate-100">
                     {staff.map(user => (
                         <div key={user.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition gap-4">
-                            <div className="flex items-center gap-4"><div className={`p-2 rounded-lg ${user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' : user.role === 'SFG_STORE' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}><User className="w-5 h-5" /></div><div><div className="font-bold text-slate-800">{user.name}</div><div className="text-xs font-mono text-slate-400">Pass: {user.password}</div></div></div>
-                            <button onClick={() => handleDeleteStaff(user.id)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                            <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg ${
+                                    user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' :
+                                    user.role === 'SFG_STORE' ? 'bg-amber-100 text-amber-600' :
+                                    'bg-rose-100 text-rose-600'
+                                }`}>
+                                    <User className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div className="font-bold text-slate-800">{user.name}</div>
+                                    <div className="text-xs font-mono text-slate-400">Pass: {user.password}</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                                <span className="text-xs font-bold uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                    {user.role === 'FG_STORE' ? 'Finished Goods' : user.role === 'SFG_STORE' ? 'Semi-Finished' : 'WIP Floor'}
+                                </span>
+                                <button onClick={() => handleDeleteStaff(user.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -621,95 +837,139 @@ const SettingsView = () => {
     );
 };
 
+// 6. Reports View
 const ReportsView = ({ allOrders, stats }) => {
-    // ... same logic
-    const pendingTasks = stats.fg.pending + stats.sfg.pending + stats.wip.pending;
-    const isLocked = pendingTasks > 0;
+  const pendingTasks = stats.fg.pending + stats.sfg.pending + stats.wip.pending;
+  const isLocked = pendingTasks > 0;
+  
+  const handleExport = () => {
+    if (isLocked) {
+      alert(`Cannot export report. ${pendingTasks} tasks are still pending.`);
+      return;
+    }
     
-    const handleExport = () => {
-        if (isLocked) { alert(`Cannot export. ${pendingTasks} tasks pending.`); return; }
-        if (!window.XLSX) return;
-        const wsData = allOrders.map(order => ({ 'SKU': order.sku, 'Category': order.category, 'Quantity': order.quantity, 'Status': order.status, 'Portal': order.portal || 'N/A', 'Picked By': order.pickedBy || 'N/A', 'Time': order.pickedAt ? formatTime(order.pickedAt) : '' }));
-        const ws = window.XLSX.utils.json_to_sheet(wsData);
-        const wb = window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
-        window.XLSX.writeFile(wb, `Warehouse_Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-    };
+    const wsData = allOrders.map(order => ({
+      'SKU': order.sku,
+      'Master SKU': getMasterSku(order.sku),
+      'Category': order.category,
+      'Quantity': order.quantity,
+      'Status': order.status,
+      'Portal': order.portal || 'N/A',
+      'Picked By': order.pickedBy || 'N/A',
+      'Time Picked': order.pickedAt ? formatTime(order.pickedAt) : '',
+      'Date': new Date().toLocaleDateString()
+    }));
 
-    const portalDistribution = useMemo(() => {
-        const dist = {};
-        allOrders.forEach(o => {
-        if (o.category === 'FG_STORE' && o.portal) {
-            dist[o.portal] = (dist[o.portal] || 0) + o.quantity;
+    const ws = window.XLSX.utils.json_to_sheet(wsData);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
+    window.XLSX.writeFile(wb, `Warehouse_Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const portalDistribution = useMemo(() => {
+    const dist = {};
+    allOrders.forEach(o => {
+      if (o.category === 'FG_STORE' && o.portal) {
+        dist[o.portal] = (dist[o.portal] || 0) + o.quantity;
+      }
+    });
+    return Object.entries(dist).sort((a,b) => b[1] - a[1]);
+  }, [allOrders]);
+
+  // Aggregate user performance
+  const userPerformance = useMemo(() => {
+    const perf = {};
+    allOrders.forEach(o => {
+        if (o.status === 'COMPLETED' && o.pickedBy) {
+            if (!perf[o.pickedBy]) perf[o.pickedBy] = { lines: 0, units: 0 };
+            perf[o.pickedBy].lines += 1;
+            perf[o.pickedBy].units += (o.quantity || 0);
         }
-        });
-        return Object.entries(dist).sort((a,b) => b[1] - a[1]);
-    }, [allOrders]);
+    });
+    return Object.entries(perf).sort((a,b) => b[1].units - a[1].units);
+  }, [allOrders]);
 
-    const userPerformance = useMemo(() => {
-        const perf = {};
-        allOrders.forEach(o => {
-            if (o.status === 'COMPLETED' && o.pickedBy) {
-                if (!perf[o.pickedBy]) perf[o.pickedBy] = { lines: 0, units: 0 };
-                perf[o.pickedBy].lines += 1;
-                perf[o.pickedBy].units += (o.quantity || 0);
-            }
-        });
-        return Object.entries(perf).sort((a,b) => b[1].units - a[1].units);
-    }, [allOrders]);
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+       
+       {/* Export Card */}
+       <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
+          <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
+             {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
+          </div>
+          <div>
+             <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
+             <p className="text-slate-500 mt-2 max-w-md mx-auto">
+                {isLocked 
+                  ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
+                  : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
+             </p>
+          </div>
+          <button 
+            onClick={handleExport}
+            disabled={isLocked}
+            className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}
+          >
+             <FileSpreadsheet className="w-5 h-5" />
+             Download Excel Report
+          </button>
+       </div>
 
-    return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-        <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
-            <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
-                {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
-            </div>
-            <div>
-                <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
-                <p className="text-slate-500 mt-2 max-w-md mx-auto">
-                    {isLocked 
-                    ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
-                    : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
-                </p>
-            </div>
-            <button onClick={handleExport} disabled={isLocked} className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}>
-                <FileSpreadsheet className="w-5 h-5" /> Download Excel Report
-            </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution</h4>
-                <div className="space-y-3">
-                    {portalDistribution.map(([portal, qty]) => (
-                    <div key={portal} className="flex items-center gap-3">
-                        <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div></div>
-                        <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
-                    </div>
-                    ))}
-                </div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance</h4>
-                <div className="overflow-hidden rounded-lg border border-slate-100">
-                    <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs"><tr><th className="px-4 py-3">User</th><th className="px-4 py-3 text-right">Lines</th><th className="px-4 py-3 text-right">Units</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {userPerformance.length === 0 && <tr><td colSpan="3" className="px-4 py-4 text-center text-slate-400 italic">No activity yet</td></tr>}
-                        {userPerformance.map(([user, data]) => (
-                            <tr key={user} className="hover:bg-slate-50"><td className="px-4 py-3 font-medium text-slate-700">{user}</td><td className="px-4 py-3 text-right text-slate-600">{data.lines}</td><td className="px-4 py-3 text-right font-bold text-blue-600">{data.units}</td></tr>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        </div>
-    );
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Portal Chart */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution
+             </h4>
+             <div className="space-y-3">
+                {portalDistribution.map(([portal, qty]) => (
+                   <div key={portal} className="flex items-center gap-3">
+                      <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div>
+                      </div>
+                      <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
+                   </div>
+                ))}
+             </div>
+          </div>
+
+          {/* Activity Log / Leaderboard */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance
+             </h4>
+             <div className="overflow-hidden rounded-lg border border-slate-100">
+                <table className="w-full text-sm text-left">
+                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
+                      <tr>
+                         <th className="px-4 py-3">User</th>
+                         <th className="px-4 py-3 text-right">Lines</th>
+                         <th className="px-4 py-3 text-right">Units</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {userPerformance.length === 0 && (
+                          <tr><td colSpan="3" className="px-4 py-4 text-center text-slate-400 italic">No activity yet</td></tr>
+                      )}
+                      {userPerformance.map(([user, data]) => (
+                        <tr key={user} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-medium text-slate-700">{user}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{data.lines}</td>
+                            <td className="px-4 py-3 text-right font-bold text-blue-600">{data.units}</td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+       </div>
+    </div>
+  );
 };
 
+// 7. Stats View
 const StatsView = () => {
-    // ... same logic
     const [history, setHistory] = useState([]);
     const [filter, setFilter] = useState(7); // Default to 7 days
 
@@ -763,45 +1023,110 @@ const StatsView = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            
+            {/* Controls */}
             <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4">
                 <div className="flex gap-2">
                     {[7, 30, 'ALL'].map((f) => (
-                        <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                        <button 
+                            key={f} 
+                            onClick={() => setFilter(f)}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                        >
                             {f === 'ALL' ? 'All Time' : `Last ${f} Days`}
                         </button>
                     ))}
                 </div>
-                <button onClick={handleExportHistory} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold hover:bg-emerald-200 transition">
+                <button 
+                    onClick={handleExportHistory}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold hover:bg-emerald-200 transition"
+                >
                     <Download className="w-4 h-4" /> Export History
                 </button>
             </div>
+
+            {/* Big Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Total Units Processed</p><p className="text-3xl font-bold text-slate-800 mt-1">{aggregate.units.toLocaleString()}</p></div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Completion Rate</p><p className="text-3xl font-bold text-emerald-600 mt-1">{aggregate.total ? Math.round((aggregate.completed / aggregate.total) * 100) : 0}%</p></div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Total Orders</p><p className="text-3xl font-bold text-blue-600 mt-1">{aggregate.total.toLocaleString()}</p></div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Avg Daily Units</p><p className="text-3xl font-bold text-purple-600 mt-1">{filteredHistory.length ? Math.round(aggregate.units / filteredHistory.length) : 0}</p></div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Total Units Processed</p>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{aggregate.units.toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Completion Rate</p>
+                    <p className="text-3xl font-bold text-emerald-600 mt-1">
+                        {aggregate.total ? Math.round((aggregate.completed / aggregate.total) * 100) : 0}%
+                    </p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Total Orders</p>
+                    <p className="text-3xl font-bold text-blue-600 mt-1">{aggregate.total.toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-slate-400 text-xs font-bold uppercase">Avg Daily Units</p>
+                    <p className="text-3xl font-bold text-purple-600 mt-1">
+                        {filteredHistory.length ? Math.round(aggregate.units / filteredHistory.length) : 0}
+                    </p>
+                </div>
             </div>
+
+            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Category Split (Pie-like visual) */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChart className="w-5 h-5 text-indigo-500" /> Category Split</h3>
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <PieChart className="w-5 h-5 text-indigo-500" /> Category Split
+                    </h3>
                     <div className="space-y-4">
-                        {[{ label: 'Finished Goods', val: aggregate.fg, color: 'bg-emerald-500' }, { label: 'Semi-Finished', val: aggregate.sfg, color: 'bg-amber-500' }, { label: 'WIP Floor', val: aggregate.wip, color: 'bg-rose-500' }].map((cat) => (
-                            <div key={cat.label}><div className="flex justify-between text-sm font-medium text-slate-600 mb-1"><span>{cat.label}</span><span>{Math.round((cat.val / (aggregate.total || 1)) * 100)}%</span></div><div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${cat.color}`} style={{ width: `${(cat.val / (aggregate.total || 1)) * 100}%` }}></div></div></div>
+                        {[
+                            { label: 'Finished Goods', val: aggregate.fg, color: 'bg-emerald-500' },
+                            { label: 'Semi-Finished', val: aggregate.sfg, color: 'bg-amber-500' },
+                            { label: 'WIP Floor', val: aggregate.wip, color: 'bg-rose-500' },
+                        ].map((cat) => (
+                            <div key={cat.label}>
+                                <div className="flex justify-between text-sm font-medium text-slate-600 mb-1">
+                                    <span>{cat.label}</span>
+                                    <span>{Math.round((cat.val / (aggregate.total || 1)) * 100)}%</span>
+                                </div>
+                                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${cat.color}`} style={{ width: `${(cat.val / (aggregate.total || 1)) * 100}%` }}></div>
+                                </div>
+                            </div>
                         ))}
                     </div>
                 </div>
+
+                {/* Daily Trend (Bar Chart Visual) */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-500" /> Daily Output Trend</h3>
+                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-blue-500" /> Daily Output Trend
+                    </h3>
                     <div className="flex items-end justify-between gap-2 h-40 mt-8">
                         {filteredHistory.slice(-14).map((h, i) => {
                             const max = Math.max(...filteredHistory.map(x => x.units), 100);
                             const height = Math.max((h.units / max) * 100, 5);
-                            return (<div key={i} className="flex flex-col items-center flex-1 group relative"><div className="w-full bg-blue-100 rounded-t-sm hover:bg-blue-200 transition-all relative" style={{ height: `${height}%` }}><div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">{h.units}</div></div><span className="text-[10px] text-slate-400 mt-2 rotate-0 truncate w-full text-center">{h.day.split('-')[2]}</span></div>);
+                            return (
+                                <div key={i} className="flex flex-col items-center flex-1 group relative">
+                                    <div 
+                                        className="w-full bg-blue-100 rounded-t-sm hover:bg-blue-200 transition-all relative"
+                                        style={{ height: `${height}%` }}
+                                    >
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {h.units}
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 mt-2 rotate-0 truncate w-full text-center">
+                                        {h.day.split('-')[2]}
+                                    </span>
+                                </div>
+                            );
                         })}
-                        {filteredHistory.length === 0 && <div className="w-full text-center text-slate-400 text-sm self-center">No history data available yet.</div>}
+                        {filteredHistory.length === 0 && (
+                            <div className="w-full text-center text-slate-400 text-sm self-center">No history data available yet.</div>
+                        )}
                     </div>
                 </div>
             </div>
+
         </div>
     );
 };
@@ -820,6 +1145,7 @@ const AdminDashboard = ({ user, logout }) => {
   const [columnMap, setColumnMap] = useState(null); 
   const [detailCategory, setDetailCategory] = useState(null); // 'FG_STORE' | 'SFG_STORE' | 'WIP_FLOOR'
   const [completedUnits, setCompletedUnits] = useState(0);
+  const [activeActivityTab, setActiveActivityTab] = useState('FG_STORE');
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -830,12 +1156,6 @@ const AdminDashboard = ({ user, logout }) => {
 
   useEffect(() => {
     if (!user || !db) return;
-    
-    // Stats Summary Listener
-    const statsRef = doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary');
-    const unsubStats = onSnapshot(statsRef, (docSnap) => {
-        if (docSnap.exists()) setGrandTotal(docSnap.data().grandTotal || 0);
-    });
     
     // Main Orders Listener
     const ordersQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
@@ -854,6 +1174,10 @@ const AdminDashboard = ({ user, logout }) => {
       
       const completedCount = orders.filter(o => o.status === 'COMPLETED').reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0);
       setCompletedUnits(completedCount);
+      
+      // Dynamic Grand Total calculation
+      const dynamicTotal = orders.reduce((acc, curr) => acc + (parseInt(curr.quantity) || 0), 0);
+      setGrandTotal(dynamicTotal);
 
       setStats({ fg, sfg, wip });
 
@@ -875,10 +1199,10 @@ const AdminDashboard = ({ user, logout }) => {
            if (livePortals[p] !== undefined) livePortals[p] += (parseInt(order.quantity) || 0);
         }
       });
-      setPortalStats(prev => ({ ...livePortals, grandTotal: grandTotal })); 
+      setPortalStats(prev => ({ ...livePortals, grandTotal: dynamicTotal })); 
     });
-    return () => { unsubStats(); unsubOrders(); };
-  }, [user, grandTotal]);
+    return () => { unsubOrders(); };
+  }, [user]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -902,6 +1226,16 @@ const AdminDashboard = ({ user, logout }) => {
           else if (row.findIndex(c => c.includes('fg') && c.includes('code')) !== -1) ci.fgSku = row.findIndex(c => c.includes('fg') && c.includes('code'));
           if (row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('sku')) !== -1) ci.sfgSku = row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('sku'));
           else if (row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('code')) !== -1) ci.sfgSku = row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('code'));
+          
+          // Enhanced Portal Detection - check if header INCLUDES the name
+          if (row.findIndex(c => c.includes('ajio')) !== -1) ci.ajio = row.findIndex(c => c.includes('ajio'));
+          if (row.findIndex(c => c.includes('nykaa')) !== -1) ci.nykaa = row.findIndex(c => c.includes('nykaa'));
+          if (row.findIndex(c => c.includes('flipkart')) !== -1) ci.flipkart = row.findIndex(c => c.includes('flipkart'));
+          if (row.findIndex(c => c.includes('amazon')) !== -1) ci.amazon = row.findIndex(c => c.includes('amazon'));
+          if (row.findIndex(c => c.includes('myntra')) !== -1) ci.myntra = row.findIndex(c => c.includes('myntra'));
+          if (row.findIndex(c => c.includes('firstcry')) !== -1) ci.firstcry = row.findIndex(c => c.includes('firstcry'));
+          if (row.findIndex(c => c.includes('website')) !== -1) ci.website = row.findIndex(c => c.includes('website'));
+
           if (row.findIndex(c => c.includes('finish') && c.includes('good')) !== -1) { score += 3; ci.fg = row.findIndex(c => c.includes('finish') && c.includes('good')); }
           if (row.findIndex(c => c.includes('semi') && c.includes('finish')) !== -1) { score += 3; ci.sfg = row.findIndex(c => c.includes('semi') && c.includes('finish')); }
           if (row.findIndex(c => c.includes('wip')) !== -1) { score += 3; ci.wip = row.findIndex(c => c.includes('wip')); }
@@ -923,8 +1257,7 @@ const AdminDashboard = ({ user, logout }) => {
       const row = parsedData[i];
       if (!row) continue;
       const sku = row[skuIdx];
-      if (!sku || String(sku).toLowerCase().includes('total')) continue;
-
+      if (!sku) continue;
       const fgAvailable = fgIdx !== -1 ? parseQty(row[fgIdx]) : 0;
       const sfgQty = sfgIdx !== -1 ? parseQty(row[sfgIdx]) : 0;
       const wipQty = wipIdx !== -1 ? parseQty(row[wipIdx]) : 0;
@@ -941,16 +1274,24 @@ const AdminDashboard = ({ user, logout }) => {
         const portals = ['Ajio', 'Nykaa', 'Flipkart', 'Amazon', 'Myntra', 'FirstCry', 'Website'];
         const pIndices = [columnMap.ajio, columnMap.nykaa, columnMap.flipkart, columnMap.amazon, columnMap.myntra, columnMap.firstcry, columnMap.website];
         
+        // Calculate sum of portal quantities to check against total
+        let portalSum = 0;
+        pIndices.forEach((idx, i) => {
+            if (idx !== undefined && idx !== -1) portalSum += parseQty(row[idx]);
+        });
+        
+        // If portal sum is greater than total FG column, assume total column is wrong/missing and use sum
+        if (portalSum > remainingFg) remainingFg = portalSum;
+
         portals.forEach((pName, idx) => {
-            const pQty = pIndices[idx] !== -1 ? parseQty(row[pIndices[idx]]) : 0;
-            if (remainingFg > 0 && pQty > 0) {
-                const take = Math.min(remainingFg, pQty);
-                // Robust portal naming: Check if header includes the keyword
-                let detectedPortal = pName;
-                // If the column map has an index for 'amazon', use 'Amazon' as portal name, etc.
-                // Simplified here: Just use the fixed list.
-                batch.push({ ...baseItem, quantity: take, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: pName });
-                remainingFg -= take;
+            const pIndex = pIndices[idx];
+            if (pIndex !== undefined && pIndex !== -1) {
+                const pQty = parseQty(row[pIndex]);
+                if (remainingFg > 0 && pQty > 0) {
+                    const take = Math.min(remainingFg, pQty);
+                    batch.push({ ...baseItem, quantity: take, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: pName });
+                    remainingFg -= take;
+                }
             }
         });
         if (remainingFg > 0) batch.push({ ...baseItem, quantity: remainingFg, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: 'All Stock' });
@@ -962,7 +1303,7 @@ const AdminDashboard = ({ user, logout }) => {
     try {
       const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders');
       await Promise.all(batch.map(item => addDoc(collectionRef, item)));
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stats', 'daily_summary'), { grandTotal: grandTotalSum });
+      // Removed setDoc for daily_summary to rely on dynamic calc
       setParsedData([]); setFileName(''); setColumnMap(null);
     } catch (err) { console.error(err); alert("Error uploading. Check console."); } 
     finally { setIsUploading(false); }
@@ -979,6 +1320,9 @@ const AdminDashboard = ({ user, logout }) => {
   };
 
   const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
+  
+  // Filter recent completed by active tab
+  const filteredActivity = recentCompleted.filter(t => t.category === activeActivityTab);
 
   return (
     <DashboardLayout 
@@ -1040,10 +1384,30 @@ const AdminDashboard = ({ user, logout }) => {
                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all text-left group"><div className="flex justify-between items-start mb-3"><div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform"><TrendingUp className="w-5 h-5" /></div></div><p className="text-3xl font-bold text-slate-800">{completedUnits}</p><p className="text-xs text-slate-500 font-medium mt-1">Total Completed Units</p></div>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden h-[400px]">
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-500" /> Live Activity Stream</h3><span className="text-xs bg-white border px-2 py-1 rounded text-slate-500">{recentCompleted.length} recent</span></div>
+                    <div className="p-4 border-b border-slate-100 bg-slate-50">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-3"><Activity className="w-4 h-4 text-emerald-500" /> Live Activity Stream</h3>
+                        <div className="flex bg-slate-200 p-1 rounded-lg">
+                            <button onClick={() => setActiveActivityTab('FG_STORE')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${activeActivityTab === 'FG_STORE' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>Finished Goods</button>
+                            <button onClick={() => setActiveActivityTab('SFG_STORE')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${activeActivityTab === 'SFG_STORE' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}>Semi-Finished</button>
+                            <button onClick={() => setActiveActivityTab('WIP_FLOOR')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${activeActivityTab === 'WIP_FLOOR' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>WIP Floor</button>
+                        </div>
+                    </div>
                     <div className="overflow-y-auto flex-1 p-0 divide-y divide-slate-50">
-                        {recentCompleted.length === 0 && <div className="text-slate-400 text-sm italic text-center py-10">No completed tasks yet.</div>}
-                        {recentCompleted.map((task) => (<div key={task.id} className="p-3 hover:bg-slate-50 flex justify-between items-center"><div><div className="font-bold text-slate-700 text-sm font-mono">{task.sku}</div><div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><User className="w-3 h-3"/> {task.pickedBy}</div></div><div className="text-right"><span className="block font-bold text-emerald-600 text-sm">+{task.quantity}</span><span className="text-[10px] text-slate-400">{formatTime(task.pickedAt)}</span></div></div>))}
+                        {filteredActivity.length === 0 && <div className="text-slate-400 text-sm italic text-center py-10">No completed tasks yet.</div>}
+                        {filteredActivity.map((task) => (
+                            <div key={task.id} className="p-3 hover:bg-slate-50 flex justify-between items-center">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <span className={`text-[10px] px-1.5 rounded font-bold uppercase ${task.category === 'FG_STORE' ? 'bg-emerald-100 text-emerald-700' : task.category === 'SFG_STORE' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                                            {task.category === 'FG_STORE' ? 'FG' : task.category === 'SFG_STORE' ? 'SFG' : 'WIP'}
+                                        </span>
+                                        <span className="font-bold text-slate-700 text-sm font-mono">{task.sku}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-400 flex items-center gap-1"><User className="w-3 h-3"/> {task.pickedBy}</div>
+                                </div>
+                                <div className="text-right"><span className="block font-bold text-emerald-600 text-sm">+{task.quantity}</span><span className="text-[10px] text-slate-400">{formatTime(task.pickedAt)}</span></div>
+                            </div>
+                        ))}
                     </div>
                 </div>
                 <div className="flex justify-end pt-4"><button onClick={handleClearAll} className="flex items-center gap-2 text-red-500 font-bold text-xs hover:bg-red-50 px-4 py-2 rounded-lg transition border border-red-200 hover:border-red-300"><AlertCircle className="w-4 h-4" /> Reset System Data</button></div>
