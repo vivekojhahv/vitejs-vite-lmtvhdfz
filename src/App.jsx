@@ -52,8 +52,13 @@ const appId = "hv-global-warehouse-ops-v1";
 const parseQty = (val) => {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return val;
-  const num = parseInt(String(val).replace(/[^0-9-]/g, ''));
-  return isNaN(num) ? 0 : num;
+  const s = String(val).trim();
+  // Only parse integers
+  if (/^[\d\s]+$/.test(s)) {
+      const num = parseInt(s.replace(/\s/g, ''));
+      return isNaN(num) ? 0 : num;
+  }
+  return 0;
 };
 
 const getMasterSku = (sku) => {
@@ -74,7 +79,7 @@ const formatDate = (timestamp) => {
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-// --- GLOBAL STYLES (LAYOUT FIX) ---
+// --- GLOBAL STYLES ---
 const GlobalStyles = () => (
   <style>{`
     html, body, #root {
@@ -225,7 +230,6 @@ const CategoryDetailModal = ({ category, onClose, orders }) => {
 
     if (!category) return null;
     
-    // Show ALL items (Pending + Completed) for Admin view
     const filtered = orders.filter(o => o.category === category);
     
     let content;
@@ -338,7 +342,7 @@ const CategoryDetailModal = ({ category, onClose, orders }) => {
     );
 };
 
-// 3. Login Modal
+// ... LoginModal ...
 const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [users, setUsers] = useState([]);
@@ -455,6 +459,7 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
 };
 
 // 4. SKU Mapping Modal
+// ... SkuMappingModal ...
 const SkuMappingModal = ({ isOpen, onClose }) => {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -689,6 +694,7 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
 
 // 5. Settings View
 const SettingsView = () => {
+    // ... same logic
     const [staff, setStaff] = useState([]);
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState('FG_STORE');
@@ -734,101 +740,31 @@ const SettingsView = () => {
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
             <SkuMappingModal isOpen={mappingModalOpen} onClose={() => setMappingModalOpen(false)} />
-
-            {/* System Configuration Card - Moved SKU Map Button Here */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-indigo-500" /> System Configuration
-                </h3>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-indigo-500" /> System Configuration</h3>
                 <div className="flex flex-wrap gap-4">
-                     <button 
-                        onClick={() => setMappingModalOpen(true)}
-                        className="flex items-center gap-3 px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition group text-left"
-                     >
-                        <div className="p-2 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform">
-                            <Link className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <div>
-                            <div className="font-bold text-slate-700">SKU Mapping</div>
-                            <div className="text-xs text-slate-500">Manage Master/FG/SFG Links</div>
-                        </div>
+                     <button onClick={() => setMappingModalOpen(true)} className="flex items-center gap-3 px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition group text-left">
+                        <div className="p-2 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform"><Link className="w-5 h-5 text-indigo-600" /></div>
+                        <div><div className="font-bold text-slate-700">SKU Mapping</div><div className="text-xs text-slate-500">Manage Master/FG/SFG Links</div></div>
                      </button>
                 </div>
             </div>
-
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <Plus className="w-5 h-5 text-blue-500" /> Add New Staff
-                </h3>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-500" /> Add New Staff</h3>
                 <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
-                        <input 
-                            type="text" 
-                            className="w-full p-2.5 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="John Doe"
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">Role</label>
-                        <select 
-                            className="w-full p-2.5 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                            value={newRole}
-                            onChange={(e) => setNewRole(e.target.value)}
-                        >
-                            <option value="FG_STORE">Finished Goods</option>
-                            <option value="SFG_STORE">Semi-Finished</option>
-                            <option value="WIP_FLOOR">WIP Floor</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
-                        <input 
-                            type="text" 
-                            className="w-full p-2.5 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                            placeholder="Set Password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <button type="submit" disabled={loading} className="p-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex justify-center items-center">
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add User'}
-                    </button>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Name</label><input type="text" className="w-full p-2.5 border rounded-lg mt-1 outline-none" placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} required /></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Role</label><select className="w-full p-2.5 border rounded-lg mt-1 outline-none bg-white" value={newRole} onChange={(e) => setNewRole(e.target.value)}><option value="FG_STORE">Finished Goods</option><option value="SFG_STORE">Semi-Finished</option><option value="WIP_FLOOR">WIP Floor</option></select></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Password</label><input type="text" className="w-full p-2.5 border rounded-lg mt-1 outline-none font-mono" placeholder="Set Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></div>
+                    <button type="submit" disabled={loading} className="p-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex justify-center items-center">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add User'}</button>
                 </form>
             </div>
-
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2">
-                    <Users className="w-5 h-5" /> Staff Directory
-                </div>
+                <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2"><Users className="w-5 h-5" /> Staff Directory</div>
                 <div className="divide-y divide-slate-100">
                     {staff.map(user => (
                         <div key={user.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition gap-4">
-                            <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-lg ${
-                                    user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' :
-                                    user.role === 'SFG_STORE' ? 'bg-amber-100 text-amber-600' :
-                                    'bg-rose-100 text-rose-600'
-                                }`}>
-                                    <User className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <div className="font-bold text-slate-800">{user.name}</div>
-                                    <div className="text-xs font-mono text-slate-400">Pass: {user.password}</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                                <span className="text-xs font-bold uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">
-                                    {user.role === 'FG_STORE' ? 'Finished Goods' : user.role === 'SFG_STORE' ? 'Semi-Finished' : 'WIP Floor'}
-                                </span>
-                                <button onClick={() => handleDeleteStaff(user.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
+                            <div className="flex items-center gap-4"><div className={`p-2 rounded-lg ${user.role === 'FG_STORE' ? 'bg-emerald-100 text-emerald-600' : user.role === 'SFG_STORE' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}><User className="w-5 h-5" /></div><div><div className="font-bold text-slate-800">{user.name}</div><div className="text-xs font-mono text-slate-400">Pass: {user.password}</div></div></div>
+                            <button onClick={() => handleDeleteStaff(user.id)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                         </div>
                     ))}
                 </div>
@@ -839,137 +775,94 @@ const SettingsView = () => {
 
 // 6. Reports View
 const ReportsView = ({ allOrders, stats }) => {
-  const pendingTasks = stats.fg.pending + stats.sfg.pending + stats.wip.pending;
-  const isLocked = pendingTasks > 0;
-  
-  const handleExport = () => {
-    if (isLocked) {
-      alert(`Cannot export report. ${pendingTasks} tasks are still pending.`);
-      return;
-    }
+    // ... same logic
+    const pendingTasks = stats.fg.pending + stats.sfg.pending + stats.wip.pending;
+    const isLocked = pendingTasks > 0;
     
-    const wsData = allOrders.map(order => ({
-      'SKU': order.sku,
-      'Master SKU': getMasterSku(order.sku),
-      'Category': order.category,
-      'Quantity': order.quantity,
-      'Status': order.status,
-      'Portal': order.portal || 'N/A',
-      'Picked By': order.pickedBy || 'N/A',
-      'Time Picked': order.pickedAt ? formatTime(order.pickedAt) : '',
-      'Date': new Date().toLocaleDateString()
-    }));
+    const handleExport = () => {
+        if (isLocked) { alert(`Cannot export. ${pendingTasks} tasks pending.`); return; }
+        if (!window.XLSX) return;
+        const wsData = allOrders.map(order => ({ 'SKU': order.sku, 'Category': order.category, 'Quantity': order.quantity, 'Status': order.status, 'Portal': order.portal || 'N/A', 'Picked By': order.pickedBy || 'N/A', 'Time': order.pickedAt ? formatTime(order.pickedAt) : '' }));
+        const ws = window.XLSX.utils.json_to_sheet(wsData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
+        window.XLSX.writeFile(wb, `Warehouse_Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
 
-    const ws = window.XLSX.utils.json_to_sheet(wsData);
-    const wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
-    window.XLSX.writeFile(wb, `Warehouse_Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const portalDistribution = useMemo(() => {
-    const dist = {};
-    allOrders.forEach(o => {
-      if (o.category === 'FG_STORE' && o.portal) {
-        dist[o.portal] = (dist[o.portal] || 0) + o.quantity;
-      }
-    });
-    return Object.entries(dist).sort((a,b) => b[1] - a[1]);
-  }, [allOrders]);
-
-  // Aggregate user performance
-  const userPerformance = useMemo(() => {
-    const perf = {};
-    allOrders.forEach(o => {
-        if (o.status === 'COMPLETED' && o.pickedBy) {
-            if (!perf[o.pickedBy]) perf[o.pickedBy] = { lines: 0, units: 0 };
-            perf[o.pickedBy].lines += 1;
-            perf[o.pickedBy].units += (o.quantity || 0);
+    const portalDistribution = useMemo(() => {
+        const dist = {};
+        allOrders.forEach(o => {
+        if (o.category === 'FG_STORE' && o.portal) {
+            dist[o.portal] = (dist[o.portal] || 0) + o.quantity;
         }
-    });
-    return Object.entries(perf).sort((a,b) => b[1].units - a[1].units);
-  }, [allOrders]);
+        });
+        return Object.entries(dist).sort((a,b) => b[1] - a[1]);
+    }, [allOrders]);
 
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-       
-       {/* Export Card */}
-       <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
-          <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
-             {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
-          </div>
-          <div>
-             <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
-             <p className="text-slate-500 mt-2 max-w-md mx-auto">
-                {isLocked 
-                  ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
-                  : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
-             </p>
-          </div>
-          <button 
-            onClick={handleExport}
-            disabled={isLocked}
-            className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}
-          >
-             <FileSpreadsheet className="w-5 h-5" />
-             Download Excel Report
-          </button>
-       </div>
+    const userPerformance = useMemo(() => {
+        const perf = {};
+        allOrders.forEach(o => {
+            if (o.status === 'COMPLETED' && o.pickedBy) {
+                if (!perf[o.pickedBy]) perf[o.pickedBy] = { lines: 0, units: 0 };
+                perf[o.pickedBy].lines += 1;
+                perf[o.pickedBy].units += (o.quantity || 0);
+            }
+        });
+        return Object.entries(perf).sort((a,b) => b[1].units - a[1].units);
+    }, [allOrders]);
 
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Portal Chart */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution
-             </h4>
-             <div className="space-y-3">
-                {portalDistribution.map(([portal, qty]) => (
-                   <div key={portal} className="flex items-center gap-3">
-                      <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
-                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div>
-                      </div>
-                      <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
-                   </div>
-                ))}
-             </div>
-          </div>
-
-          {/* Activity Log / Leaderboard */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-             <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance
-             </h4>
-             <div className="overflow-hidden rounded-lg border border-slate-100">
-                <table className="w-full text-sm text-left">
-                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
-                      <tr>
-                         <th className="px-4 py-3">User</th>
-                         <th className="px-4 py-3 text-right">Lines</th>
-                         <th className="px-4 py-3 text-right">Units</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                      {userPerformance.length === 0 && (
-                          <tr><td colSpan="3" className="px-4 py-4 text-center text-slate-400 italic">No activity yet</td></tr>
-                      )}
-                      {userPerformance.map(([user, data]) => (
-                        <tr key={user} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-medium text-slate-700">{user}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{data.lines}</td>
-                            <td className="px-4 py-3 text-right font-bold text-blue-600">{data.units}</td>
-                        </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-          </div>
-       </div>
-    </div>
-  );
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+        <div className={`rounded-2xl p-8 border transition-all duration-300 flex flex-col items-center text-center space-y-4 ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-xl shadow-emerald-100'}`}>
+            <div className={`p-4 rounded-full ${isLocked ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
+                {isLocked ? <Lock className="w-10 h-10" /> : <Download className="w-10 h-10 animate-bounce" />}
+            </div>
+            <div>
+                <h3 className="text-2xl font-bold text-slate-800">Daily Completion Report</h3>
+                <p className="text-slate-500 mt-2 max-w-md mx-auto">
+                    {isLocked 
+                    ? `Export is currently locked because there are ${pendingTasks} pending tasks remaining. Please complete all tasks to generate the EOD report.` 
+                    : "All tasks completed! You can now download the comprehensive End-of-Day report containing detailed timestamps and SKU breakdowns."}
+                </p>
+            </div>
+            <button onClick={handleExport} disabled={isLocked} className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-105'}`}>
+                <FileSpreadsheet className="w-5 h-5" /> Download Excel Report
+            </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChart className="w-5 h-5 text-blue-500" /> Portal Distribution</h4>
+                <div className="space-y-3">
+                    {portalDistribution.map(([portal, qty]) => (
+                    <div key={portal} className="flex items-center gap-3">
+                        <div className="w-24 text-xs font-bold text-slate-500 uppercase text-right truncate">{portal}</div>
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(qty / portalDistribution.reduce((a,b) => a+b[1], 0)) * 100}%` }}></div></div>
+                        <div className="w-12 text-right font-bold text-slate-700 text-sm">{qty}</div>
+                    </div>
+                    ))}
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-purple-500" /> Picker Performance</h4>
+                <div className="overflow-hidden rounded-lg border border-slate-100">
+                    <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs"><tr><th className="px-4 py-3">User</th><th className="px-4 py-3 text-right">Lines</th><th className="px-4 py-3 text-right">Units</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {userPerformance.length === 0 && <tr><td colSpan="3" className="px-4 py-4 text-center text-slate-400 italic">No activity yet</td></tr>}
+                        {userPerformance.map(([user, data]) => (
+                            <tr key={user} className="hover:bg-slate-50"><td className="px-4 py-3 font-medium text-slate-700">{user}</td><td className="px-4 py-3 text-right text-slate-600">{data.lines}</td><td className="px-4 py-3 text-right font-bold text-blue-600">{data.units}</td></tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div>
+    );
 };
 
-// 7. Stats View
 const StatsView = () => {
+    // ... same logic
     const [history, setHistory] = useState([]);
     const [filter, setFilter] = useState(7); // Default to 7 days
 
@@ -1023,110 +916,45 @@ const StatsView = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            
-            {/* Controls */}
             <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4">
                 <div className="flex gap-2">
                     {[7, 30, 'ALL'].map((f) => (
-                        <button 
-                            key={f} 
-                            onClick={() => setFilter(f)}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                        >
+                        <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                             {f === 'ALL' ? 'All Time' : `Last ${f} Days`}
                         </button>
                     ))}
                 </div>
-                <button 
-                    onClick={handleExportHistory}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold hover:bg-emerald-200 transition"
-                >
+                <button onClick={handleExportHistory} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold hover:bg-emerald-200 transition">
                     <Download className="w-4 h-4" /> Export History
                 </button>
             </div>
-
-            {/* Big Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <p className="text-slate-400 text-xs font-bold uppercase">Total Units Processed</p>
-                    <p className="text-3xl font-bold text-slate-800 mt-1">{aggregate.units.toLocaleString()}</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <p className="text-slate-400 text-xs font-bold uppercase">Completion Rate</p>
-                    <p className="text-3xl font-bold text-emerald-600 mt-1">
-                        {aggregate.total ? Math.round((aggregate.completed / aggregate.total) * 100) : 0}%
-                    </p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <p className="text-slate-400 text-xs font-bold uppercase">Total Orders</p>
-                    <p className="text-3xl font-bold text-blue-600 mt-1">{aggregate.total.toLocaleString()}</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <p className="text-slate-400 text-xs font-bold uppercase">Avg Daily Units</p>
-                    <p className="text-3xl font-bold text-purple-600 mt-1">
-                        {filteredHistory.length ? Math.round(aggregate.units / filteredHistory.length) : 0}
-                    </p>
-                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Total Units Processed</p><p className="text-3xl font-bold text-slate-800 mt-1">{aggregate.units.toLocaleString()}</p></div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Completion Rate</p><p className="text-3xl font-bold text-emerald-600 mt-1">{aggregate.total ? Math.round((aggregate.completed / aggregate.total) * 100) : 0}%</p></div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Total Orders</p><p className="text-3xl font-bold text-blue-600 mt-1">{aggregate.total.toLocaleString()}</p></div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><p className="text-slate-400 text-xs font-bold uppercase">Avg Daily Units</p><p className="text-3xl font-bold text-purple-600 mt-1">{filteredHistory.length ? Math.round(aggregate.units / filteredHistory.length) : 0}</p></div>
             </div>
-
-            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Category Split (Pie-like visual) */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <PieChart className="w-5 h-5 text-indigo-500" /> Category Split
-                    </h3>
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChart className="w-5 h-5 text-indigo-500" /> Category Split</h3>
                     <div className="space-y-4">
-                        {[
-                            { label: 'Finished Goods', val: aggregate.fg, color: 'bg-emerald-500' },
-                            { label: 'Semi-Finished', val: aggregate.sfg, color: 'bg-amber-500' },
-                            { label: 'WIP Floor', val: aggregate.wip, color: 'bg-rose-500' },
-                        ].map((cat) => (
-                            <div key={cat.label}>
-                                <div className="flex justify-between text-sm font-medium text-slate-600 mb-1">
-                                    <span>{cat.label}</span>
-                                    <span>{Math.round((cat.val / (aggregate.total || 1)) * 100)}%</span>
-                                </div>
-                                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full ${cat.color}`} style={{ width: `${(cat.val / (aggregate.total || 1)) * 100}%` }}></div>
-                                </div>
-                            </div>
+                        {[{ label: 'Finished Goods', val: aggregate.fg, color: 'bg-emerald-500' }, { label: 'Semi-Finished', val: aggregate.sfg, color: 'bg-amber-500' }, { label: 'WIP Floor', val: aggregate.wip, color: 'bg-rose-500' }].map((cat) => (
+                            <div key={cat.label}><div className="flex justify-between text-sm font-medium text-slate-600 mb-1"><span>{cat.label}</span><span>{Math.round((cat.val / (aggregate.total || 1)) * 100)}%</span></div><div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${cat.color}`} style={{ width: `${(cat.val / (aggregate.total || 1)) * 100}%` }}></div></div></div>
                         ))}
                     </div>
                 </div>
-
-                {/* Daily Trend (Bar Chart Visual) */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-blue-500" /> Daily Output Trend
-                    </h3>
+                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-500" /> Daily Output Trend</h3>
                     <div className="flex items-end justify-between gap-2 h-40 mt-8">
                         {filteredHistory.slice(-14).map((h, i) => {
                             const max = Math.max(...filteredHistory.map(x => x.units), 100);
                             const height = Math.max((h.units / max) * 100, 5);
-                            return (
-                                <div key={i} className="flex flex-col items-center flex-1 group relative">
-                                    <div 
-                                        className="w-full bg-blue-100 rounded-t-sm hover:bg-blue-200 transition-all relative"
-                                        style={{ height: `${height}%` }}
-                                    >
-                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {h.units}
-                                        </div>
-                                    </div>
-                                    <span className="text-[10px] text-slate-400 mt-2 rotate-0 truncate w-full text-center">
-                                        {h.day.split('-')[2]}
-                                    </span>
-                                </div>
-                            );
+                            return (<div key={i} className="flex flex-col items-center flex-1 group relative"><div className="w-full bg-blue-100 rounded-t-sm hover:bg-blue-200 transition-all relative" style={{ height: `${height}%` }}><div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">{h.units}</div></div><span className="text-[10px] text-slate-400 mt-2 rotate-0 truncate w-full text-center">{h.day.split('-')[2]}</span></div>);
                         })}
-                        {filteredHistory.length === 0 && (
-                            <div className="w-full text-center text-slate-400 text-sm self-center">No history data available yet.</div>
-                        )}
+                        {filteredHistory.length === 0 && <div className="w-full text-center text-slate-400 text-sm self-center">No history data available yet.</div>}
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };
@@ -1228,17 +1056,25 @@ const AdminDashboard = ({ user, logout }) => {
           else if (row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('code')) !== -1) ci.sfgSku = row.findIndex(c => (c.includes('sfg') || c.includes('semi')) && c.includes('code'));
           
           // Enhanced Portal Detection - check if header INCLUDES the name
-          if (row.findIndex(c => c.includes('ajio')) !== -1) ci.ajio = row.findIndex(c => c.includes('ajio'));
-          if (row.findIndex(c => c.includes('nykaa')) !== -1) ci.nykaa = row.findIndex(c => c.includes('nykaa'));
-          if (row.findIndex(c => c.includes('flipkart')) !== -1) ci.flipkart = row.findIndex(c => c.includes('flipkart'));
-          if (row.findIndex(c => c.includes('amazon')) !== -1) ci.amazon = row.findIndex(c => c.includes('amazon'));
-          if (row.findIndex(c => c.includes('myntra')) !== -1) ci.myntra = row.findIndex(c => c.includes('myntra'));
-          if (row.findIndex(c => c.includes('firstcry')) !== -1) ci.firstcry = row.findIndex(c => c.includes('firstcry'));
-          if (row.findIndex(c => c.includes('website')) !== -1) ci.website = row.findIndex(c => c.includes('website'));
+          if (row.findIndex(c => c.includes('ajio')) !== -1) ci.ajio = row.findIndex(c => c.includes('ajio') && !c.includes('date') && !c.includes('id'));
+          if (row.findIndex(c => c.includes('nykaa')) !== -1) ci.nykaa = row.findIndex(c => c.includes('nykaa') && !c.includes('date') && !c.includes('id'));
+          if (row.findIndex(c => c.includes('flipkart')) !== -1) ci.flipkart = row.findIndex(c => c.includes('flipkart') && !c.includes('date') && !c.includes('id'));
+          if (row.findIndex(c => c.includes('amazon')) !== -1) ci.amazon = row.findIndex(c => c.includes('amazon') && !c.includes('date') && !c.includes('id'));
+          if (row.findIndex(c => c.includes('myntra')) !== -1) ci.myntra = row.findIndex(c => c.includes('myntra') && !c.includes('date') && !c.includes('id'));
+          if (row.findIndex(c => c.includes('firstcry')) !== -1) ci.firstcry = row.findIndex(c => c.includes('firstcry') && !c.includes('date') && !c.includes('id'));
+          if (row.findIndex(c => c.includes('website')) !== -1) ci.website = row.findIndex(c => c.includes('website') && !c.includes('date') && !c.includes('id'));
 
-          if (row.findIndex(c => c.includes('finish') && c.includes('good')) !== -1) { score += 3; ci.fg = row.findIndex(c => c.includes('finish') && c.includes('good')); }
-          if (row.findIndex(c => c.includes('semi') && c.includes('finish')) !== -1) { score += 3; ci.sfg = row.findIndex(c => c.includes('semi') && c.includes('finish')); }
-          if (row.findIndex(c => c.includes('wip')) !== -1) { score += 3; ci.wip = row.findIndex(c => c.includes('wip')); }
+          // Avoid picking up columns like "Order ID" or "Line No"
+          const isQtyHeader = c => c.includes('qty') || c.includes('quantity') || c.includes('stock') || c.includes('count') || c.includes('unit') || c.includes('available');
+
+          if (row.findIndex(c => c.includes('finish') && c.includes('good') && isQtyHeader(c)) !== -1) { score += 3; ci.fg = row.findIndex(c => c.includes('finish') && c.includes('good') && isQtyHeader(c)); }
+          else if (row.findIndex(c => c.includes('fg') && isQtyHeader(c)) !== -1) { score += 3; ci.fg = row.findIndex(c => c.includes('fg') && isQtyHeader(c)); } // Fallback
+
+          if (row.findIndex(c => c.includes('semi') && c.includes('finish') && isQtyHeader(c)) !== -1) { score += 3; ci.sfg = row.findIndex(c => c.includes('semi') && c.includes('finish') && isQtyHeader(c)); }
+           else if (row.findIndex(c => c.includes('sfg') && isQtyHeader(c)) !== -1) { score += 3; ci.sfg = row.findIndex(c => c.includes('sfg') && isQtyHeader(c)); }
+
+          if (row.findIndex(c => c.includes('wip') && (isQtyHeader(c) || c.includes('pick'))) !== -1) { score += 3; ci.wip = row.findIndex(c => c.includes('wip') && (isQtyHeader(c) || c.includes('pick'))); }
+          
           if (score > maxScore) { maxScore = score; headerRowIndex = i; colIndices = ci; }
       }
       if (headerRowIndex !== -1) setColumnMap({ headerRowIndex, ...colIndices });
@@ -1257,7 +1093,10 @@ const AdminDashboard = ({ user, logout }) => {
       const row = parsedData[i];
       if (!row) continue;
       const sku = row[skuIdx];
-      if (!sku) continue;
+      // Skip row if SKU is missing or looks like a summary row
+      if (!sku || String(sku).toLowerCase().includes('total')) continue;
+
+      // Use the explicit columns from Excel as the source of truth
       const fgAvailable = fgIdx !== -1 ? parseQty(row[fgIdx]) : 0;
       const sfgQty = sfgIdx !== -1 ? parseQty(row[sfgIdx]) : 0;
       const wipQty = wipIdx !== -1 ? parseQty(row[wipIdx]) : 0;
@@ -1274,15 +1113,7 @@ const AdminDashboard = ({ user, logout }) => {
         const portals = ['Ajio', 'Nykaa', 'Flipkart', 'Amazon', 'Myntra', 'FirstCry', 'Website'];
         const pIndices = [columnMap.ajio, columnMap.nykaa, columnMap.flipkart, columnMap.amazon, columnMap.myntra, columnMap.firstcry, columnMap.website];
         
-        // Calculate sum of portal quantities to check against total
-        let portalSum = 0;
-        pIndices.forEach((idx, i) => {
-            if (idx !== undefined && idx !== -1) portalSum += parseQty(row[idx]);
-        });
-        
-        // If portal sum is greater than total FG column, assume total column is wrong/missing and use sum
-        if (portalSum > remainingFg) remainingFg = portalSum;
-
+        // Distribute the FIXED fgAvailable quantity across portals
         portals.forEach((pName, idx) => {
             const pIndex = pIndices[idx];
             if (pIndex !== undefined && pIndex !== -1) {
@@ -1294,6 +1125,9 @@ const AdminDashboard = ({ user, logout }) => {
                 }
             }
         });
+        // Only if there is still FG quantity left over after fulfilling all portals, put it in 'All Stock'
+        // This handles cases where FG > Sum of Portals (extra stock)
+        // It does NOT handle cases where FG < Sum of Portals (shortage), as that is handled by the loop breaking early when remainingFg hits 0.
         if (remainingFg > 0) batch.push({ ...baseItem, quantity: remainingFg, category: 'FG_STORE', status: 'PENDING', createdAt: serverTimestamp(), portal: 'All Stock' });
       }
 
