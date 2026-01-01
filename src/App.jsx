@@ -3,7 +3,8 @@ import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
   signInAnonymously, 
-  onAuthStateChanged
+  onAuthStateChanged,
+  signInWithCustomToken
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -24,14 +25,15 @@ import {
 import { 
   Package, Truck, Hammer, LogOut, CheckCircle2, 
   LayoutDashboard, X, Search, 
-  Globe, ArrowLeft,
-  ScanBarcode, Keyboard, CheckCheck, Loader2,
-  Activity, Clock, Upload, FileSpreadsheet,
-  TrendingUp, Users, AlertCircle, BarChart3,
+  Globe, ArrowLeft, 
+  ScanBarcode, Keyboard, CheckCheck, Loader2, 
+  Activity, Clock, Upload, FileSpreadsheet, 
+  TrendingUp, Users, AlertCircle, BarChart3, 
   PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Menu, Link, FileClock, RefreshCw, FileDown, Eye, FolderOpen
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
+// Using your specific configuration
 const firebaseConfig = {
   apiKey: "AIzaSyD_FBXkrMiZS-LiMlsdHVGOSL5cY57bLBk",
   authDomain: "hvg-warehouse.firebaseapp.com",
@@ -46,6 +48,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Using your specific App ID for Firestore paths
 const appId = "hv-global-warehouse-ops-v1"; 
 
 // --- UTILITIES ---
@@ -89,6 +92,18 @@ const GlobalStyles = () => (
       padding: 0;
       overflow: hidden;
       background-color: #F8FAFC; 
+    }
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .scrollbar-hide {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+    .safe-area-pb {
+        padding-bottom: env(safe-area-inset-bottom);
     }
   `}</style>
 );
@@ -183,7 +198,7 @@ const PickModal = ({ isOpen, onClose, onConfirm, order, role }) => {
 
   let buttonText = "Confirm Pick";
   let buttonColor = "bg-blue-600 hover:bg-blue-700";
-  
+   
   if (role === 'WIP_FLOOR') {
       if (order.status === 'PENDING') { buttonText = "Start Process"; buttonColor = "bg-amber-500 hover:bg-amber-600"; }
       else if (order.status === 'WIP_PROCESSING') { buttonText = "Finish Process"; buttonColor = "bg-green-600 hover:bg-green-700"; }
@@ -1154,7 +1169,7 @@ const AdminDashboard = ({ user, logout }) => {
   };
 
   const getPercentage = (part, total) => (!total ? 0 : Math.round((part / total) * 100));
-  
+   
   // Filter recent completed by active tab
   const filteredActivity = recentCompleted.filter(t => t.category === activeActivityTab);
 
@@ -1412,10 +1427,24 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const partialPick = async (originalOrder, pickedQty, status) => {
       try {
           const batch = writeBatch(db);
+          // Update original doc (decrement quantity)
           batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id), { quantity: originalOrder.quantity - pickedQty });
+          
+          // Create new split doc
           const newRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-          batch.set(newRef, { ...originalOrder, quantity: pickedQty, status: status, pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
-          delete completedOrder.id;
+          
+          // Clone and clean data
+          const orderData = { ...originalOrder };
+          delete orderData.id; 
+
+          batch.set(newRef, { 
+            ...orderData, 
+            quantity: pickedQty, 
+            status: status, 
+            pickedBy: loggedInUser ? loggedInUser.name : 'Staff', 
+            pickedAt: serverTimestamp() 
+          });
+          
           await batch.commit();
       } catch (error) { console.error("Error:", error); }
   };
@@ -1592,21 +1621,21 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
                   
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1 min-w-0 pr-2">
-                       <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1">
                           <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : (isWipProcess ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')}`}>
                               {isCompleted ? 'COMPLETED' : (isWipProcess ? 'IN PROCESS' : (order.portal || 'Standard'))}
                           </span>
                           <span className="text-[10px] text-slate-400 font-medium">{getMasterSku(order.sku)}</span>
-                       </div>
-                       <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
-                       
-                       {/* Display Mapped SKU codes */}
-                       {role === 'FG_STORE' && displayFG && (
-                           <div className="text-xs font-mono text-emerald-600 mt-1 bg-emerald-50 inline-block px-2 py-0.5 rounded border border-emerald-100">FG: {displayFG}</div>
-                       )}
-                       {role === 'SFG_STORE' && displaySFG && (
-                           <div className="text-xs font-mono text-amber-600 mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded border border-amber-100">SFG: {displaySFG}</div>
-                       )}
+                        </div>
+                        <h3 className={`text-lg font-bold font-mono truncate ${isCompleted ? 'text-emerald-800 line-through decoration-emerald-500/50' : 'text-slate-800'}`}>{order.sku}</h3>
+                        
+                        {/* Display Mapped SKU codes */}
+                        {role === 'FG_STORE' && displayFG && (
+                            <div className="text-xs font-mono text-emerald-600 mt-1 bg-emerald-50 inline-block px-2 py-0.5 rounded border border-emerald-100">FG: {displayFG}</div>
+                        )}
+                        {role === 'SFG_STORE' && displaySFG && (
+                            <div className="text-xs font-mono text-amber-600 mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded border border-amber-100">SFG: {displaySFG}</div>
+                        )}
                     </div>
                     {isCompleted && <CheckCheck className="w-6 h-6 text-emerald-500" />}
                     {isWipProcess && <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />}
@@ -1684,9 +1713,9 @@ export default function App() {
 
   if (!auth) return <div className="h-screen flex items-center justify-center text-red-500">Firebase Config Error</div>;
   if (!user) return <div className="h-screen flex items-center justify-center text-slate-400 gap-2"><Loader2 className="animate-spin" /> Loading Warehouse System...</div>;
-  
+   
   if (!role) return <RoleSelection onSelectRole={handleRoleSelection} />;
-  
+   
   return role === 'ADMIN' 
     ? <AdminDashboard user={user} logout={handleLogout} /> 
     : <StaffDashboard role={role} loggedInUser={loggedInUser} logout={handleLogout} />;
