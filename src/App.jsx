@@ -1471,6 +1471,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const [reverseMappings, setReverseMappings] = useState({}); 
   const [scanError, setScanError] = useState(null);
   const scanInputRef = useRef(null);
+  const scanTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!db) return;
@@ -1557,27 +1558,40 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const processScan = (code) => {
     if (!code) return;
     const raw = code.trim().toUpperCase();
-    const mappedMaster = skuMappings[raw];
-    const resolvedSku = mappedMaster || raw; 
     
-    // Find matching active order in current view
-    const match = currentViewOrders.find(o => 
-        o.sku.toUpperCase() === resolvedSku && 
+    // Strategy 1: Direct lookup in current orders (Master, FG, or SFG)
+    // This uses the data already on the order document
+    let match = currentViewOrders.find(o => 
+        (o.sku.toUpperCase() === raw || 
+         (o.fgSku && o.fgSku.toUpperCase() === raw) || 
+         (o.sfgSku && o.sfgSku.toUpperCase() === raw)) && 
         o.status !== 'COMPLETED'
     );
 
+    // Strategy 2: Use Mapping Database (Fallback if not found directly on order fields)
+    if (!match) {
+        const mappedMaster = skuMappings[raw];
+        if (mappedMaster) {
+            match = currentViewOrders.find(o => 
+                o.sku.toUpperCase() === mappedMaster.toUpperCase() && 
+                o.status !== 'COMPLETED'
+            );
+        }
+    }
+
     if (match) {
         if (match.quantity === 1) {
-            // Auto-process single quantity items
-            initiateMarkOut(match); 
-            // Note: initiateMarkOut calls completeOrder which clears scanQuery
+            // Auto-pick
+            initiateMarkOut(match);
         } else {
-            // For multiple items, just filter so user can click to pick
-            setScanQuery(resolvedSku);
+            // Filter view for manual picking
+            setScanQuery(match.sku);
         }
     } else {
-        // No active match found (e.g. all completed), just filter list
-        setScanQuery(resolvedSku);
+        // Just filter view (maybe completed or invalid)
+        // If mapped, show master, else show raw
+        const mapped = skuMappings[raw];
+        setScanQuery(mapped || raw);
     }
   };
 
@@ -1594,6 +1608,24 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         scanInputRef.current.blur();
         setTimeout(() => { if(scanInputRef.current) scanInputRef.current.focus(); }, 50);
     }
+  };
+
+  // Handle input change with auto-scan attempt
+  const handleInputChange = (e) => {
+      const val = e.target.value;
+      setScanQuery(val);
+      if(scanError) setScanError(null);
+      
+      // Auto-scan logic: If it looks like a full code (e.g. > 3 chars), try to process after a debounce
+      // Clear existing timeout
+      if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      
+      // Set new timeout
+      scanTimeoutRef.current = setTimeout(() => {
+          if(val.length > 3) {
+             processScan(val);
+          }
+      }, 800); // 800ms pause implies end of scan or typing
   };
 
   const handleModalConfirm = (pickQty) => {
@@ -1742,7 +1774,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
                     placeholder={manualMode ? "Search SKU..." : "Ready to Scan..."} 
                     className="flex-1 bg-transparent outline-none font-mono text-lg text-gray-800 font-bold w-full placeholder-gray-400" 
                     value={scanQuery} 
-                    onChange={(e) => {setScanQuery(e.target.value); if(scanError) setScanError(null);}} 
+                    onChange={handleInputChange} 
                     onKeyDown={e => { if(e.key === 'Enter') processScan(e.currentTarget.value) }} 
                     autoFocus 
                     autoComplete="off" 
@@ -1839,6 +1871,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  // Initialize state from localStorage if available
   const [role, setRole] = useState(() => localStorage.getItem('hv_app_role') || null);
   const [loggedInUser, setLoggedInUser] = useState(() => {
     const saved = localStorage.getItem('hv_app_user');
@@ -1848,13 +1881,16 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
+      // START FIX: Removed custom token logic to prevent ReferenceError and Mismatch Error
       try {
         await signInAnonymously(auth);
       } catch (error) {
         console.error("Auth failed:", error);
       }
+      // END FIX
     };
     initAuth();
+    // Load XLSX
     if (!document.getElementById('xlsx-script')) {
       const script = document.createElement('script');
       script.id = 'xlsx-script';
