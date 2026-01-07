@@ -1472,15 +1472,6 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const [scanError, setScanError] = useState(null);
   const scanInputRef = useRef(null);
 
-  // NEW: Process Scan Logic
-  const processScan = (code) => {
-    if (!code) return;
-    const raw = code.trim().toUpperCase();
-    const mappedMaster = skuMappings[raw];
-    const resolvedSku = mappedMaster || raw; 
-    setScanQuery(resolvedSku);
-  };
-
   useEffect(() => {
     if (!db) return;
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_mappings'));
@@ -1513,19 +1504,36 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     return () => unsubscribe();
   }, [role]);
 
-  useEffect(() => {
-    if (!modalOpen && !loading && selectedPortal !== undefined) {
-        const timer = setTimeout(() => { if (scanInputRef.current && !manualMode) scanInputRef.current.focus(); }, 200);
-        return () => clearTimeout(timer);
-    }
-  }, [modalOpen, loading, selectedPortal, role, manualMode]);
+  const currentViewOrders = useMemo(() => {
+    if (role === 'FG_STORE' && selectedPortal) return orders.filter(o => (o.portal || 'All Stock') === selectedPortal);
+    return orders;
+  }, [orders, role, selectedPortal]);
 
-  const toggleInputMode = () => {
-    setManualMode(prev => !prev);
-    if (scanInputRef.current) {
-        scanInputRef.current.blur();
-        setTimeout(() => { if(scanInputRef.current) scanInputRef.current.focus(); }, 50);
-    }
+  // MOVED FUNCTIONS UP: Defined these before processScan so they are accessible
+  const completeOrder = async (orderId, status) => {
+      try {
+        const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
+        await updateDoc(orderRef, { status: status, pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
+        setScanQuery('');
+      } catch (error) { console.error("Error:", error); }
+  };
+
+  const partialPick = async (originalOrder, pickedQty, status) => {
+      try {
+          const batch = writeBatch(db);
+          batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id), { quantity: originalOrder.quantity - pickedQty });
+          const newRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
+          const orderData = { ...originalOrder };
+          delete orderData.id; 
+          batch.set(newRef, { 
+            ...orderData, 
+            quantity: pickedQty, 
+            status: status, 
+            pickedBy: loggedInUser ? loggedInUser.name : 'Staff', 
+            pickedAt: serverTimestamp() 
+          });
+          await batch.commit();
+      } catch (error) { console.error("Error:", error); }
   };
 
   const initiateMarkOut = (order) => {
@@ -1545,6 +1553,49 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     }
   };
 
+  // NEW: Process Scan Logic (now defined after helper functions)
+  const processScan = (code) => {
+    if (!code) return;
+    const raw = code.trim().toUpperCase();
+    const mappedMaster = skuMappings[raw];
+    const resolvedSku = mappedMaster || raw; 
+    
+    // Find matching active order in current view
+    const match = currentViewOrders.find(o => 
+        o.sku.toUpperCase() === resolvedSku && 
+        o.status !== 'COMPLETED'
+    );
+
+    if (match) {
+        if (match.quantity === 1) {
+            // Auto-process single quantity items
+            initiateMarkOut(match); 
+            // Note: initiateMarkOut calls completeOrder which clears scanQuery
+        } else {
+            // For multiple items, just filter so user can click to pick
+            setScanQuery(resolvedSku);
+        }
+    } else {
+        // No active match found (e.g. all completed), just filter list
+        setScanQuery(resolvedSku);
+    }
+  };
+
+  useEffect(() => {
+    if (!modalOpen && !loading && selectedPortal !== undefined) {
+        const timer = setTimeout(() => { if (scanInputRef.current && !manualMode) scanInputRef.current.focus(); }, 200);
+        return () => clearTimeout(timer);
+    }
+  }, [modalOpen, loading, selectedPortal, role, manualMode]);
+
+  const toggleInputMode = () => {
+    setManualMode(prev => !prev);
+    if (scanInputRef.current) {
+        scanInputRef.current.blur();
+        setTimeout(() => { if(scanInputRef.current) scanInputRef.current.focus(); }, 50);
+    }
+  };
+
   const handleModalConfirm = (pickQty) => {
     setModalOpen(false);
     if (!targetOrder) return;
@@ -1556,31 +1607,6 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     if (pickQty === targetOrder.quantity) completeOrder(targetOrder.id, nextStatus);
     else partialPick(targetOrder, pickQty, nextStatus);
     setTargetOrder(null); setScanQuery('');
-  };
-
-  const completeOrder = async (orderId, status) => {
-      try {
-        const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
-        await updateDoc(orderRef, { status: status, pickedBy: loggedInUser ? loggedInUser.name : 'Staff', pickedAt: serverTimestamp() });
-        setScanQuery('');
-      } catch (error) { console.error("Error:", error); }
-  };
-  const partialPick = async (originalOrder, pickedQty, status) => {
-      try {
-          const batch = writeBatch(db);
-          batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', originalOrder.id), { quantity: originalOrder.quantity - pickedQty });
-          const newRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
-          const orderData = { ...originalOrder };
-          delete orderData.id; 
-          batch.set(newRef, { 
-            ...orderData, 
-            quantity: pickedQty, 
-            status: status, 
-            pickedBy: loggedInUser ? loggedInUser.name : 'Staff', 
-            pickedAt: serverTimestamp() 
-          });
-          await batch.commit();
-      } catch (error) { console.error("Error:", error); }
   };
 
   const getRoleTitle = () => {
@@ -1610,11 +1636,6 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
          return a.localeCompare(b);
      });
   }, [portalGroups]);
-
-  const currentViewOrders = useMemo(() => {
-    if (role === 'FG_STORE' && selectedPortal) return orders.filter(o => (o.portal || 'All Stock') === selectedPortal);
-    return orders;
-  }, [orders, role, selectedPortal]);
 
   const masterSkuStats = useMemo(() => {
     const stats = {};
