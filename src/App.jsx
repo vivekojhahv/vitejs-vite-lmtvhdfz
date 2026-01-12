@@ -24,13 +24,13 @@ import {
   increment 
 } from "firebase/firestore";
 import { 
-  Package, Truck, Hammer, LogOut, CheckCircle2, 
+  Package, Truck, Hammer, LogOut, CheckCircle, 
   LayoutDashboard, X, Search, 
   Globe, ArrowLeft, 
   ScanBarcode, Keyboard, CheckCheck, Loader2, 
-  Activity, Clock, Upload, FileSpreadsheet, 
+  Activity, Clock, Upload, FileText, 
   TrendingUp, Users, AlertCircle, BarChart3, 
-  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Link, FileDown, Eye
+  PieChart, Download, Lock, Settings, Plus, Trash2, User, ChevronRight, Link, Eye
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
@@ -70,13 +70,23 @@ const getMasterSku = (sku) => {
 
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
+  // Safety check for objects that aren't dates or firestore timestamps
+  if (typeof timestamp === 'object' && !timestamp.toDate && !(timestamp instanceof Date)) {
+      return '';
+  }
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 const formatDate = (timestamp) => {
   if (!timestamp) return '';
+  // Safety check for objects that aren't dates or firestore timestamps
+  if (typeof timestamp === 'object' && !timestamp.toDate && !(timestamp instanceof Date)) {
+      return ''; 
+  }
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
@@ -126,19 +136,19 @@ const DashboardLayout = ({ title, user, logout, currentTab, setTab, tabs, childr
     <>
       <GlobalStyles />
       <div className="flex flex-col h-[100dvh] w-screen bg-gray-50 text-gray-900 overflow-hidden">
-        {/* Header - Glassmorphism */}
-        <header className="flex-none h-18 bg-white/80 backdrop-blur-md border-b border-gray-200/60 z-50 flex items-center justify-between px-6 py-3 shadow-sm sticky top-0">
-          <div className="flex items-center gap-4 overflow-hidden">
-             <div className="bg-gradient-to-br from-violet-600 to-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-violet-200 flex-shrink-0">
+        {/* Header */}
+        <header className="flex-none h-18 bg-white/80 backdrop-blur-md border-b border-gray-200/60 z-50 flex items-center justify-between px-4 sm:px-6 py-3 shadow-sm sticky top-0">
+          <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+             <div className="bg-gradient-to-br from-violet-600 to-indigo-600 p-2 sm:p-2.5 rounded-xl text-white shadow-lg shadow-violet-200 flex-shrink-0">
                <Package className="w-5 h-5" />
              </div>
              <div className="min-w-0">
-               <h1 className="text-xl font-extrabold text-gray-800 leading-none tracking-tight">{title}</h1>
-               <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mt-1 truncate">{user?.name || 'User'}</div>
+               <h1 className="text-lg sm:text-xl font-extrabold text-gray-800 leading-none tracking-tight truncate">{title}</h1>
+               <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mt-1 truncate">{user?.name || 'User'}</div>
              </div>
           </div>
 
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
              {/* Desktop Navigation */}
              {tabs && (
                <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 p-1.5 rounded-2xl border border-gray-200">
@@ -146,7 +156,7 @@ const DashboardLayout = ({ title, user, logout, currentTab, setTab, tabs, childr
                    <button 
                      key={tab.id}
                      onClick={() => setTab(tab.id)}
-                     className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-300 flex items-center gap-2 ${currentTab === tab.id ? 'bg-white text-violet-700 shadow-md shadow-gray-200 scale-105' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
+                     className={`px-4 lg:px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-300 flex items-center gap-2 ${currentTab === tab.id ? 'bg-white text-violet-700 shadow-md shadow-gray-200 scale-105' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                    >
                      <tab.icon className={`w-4 h-4 ${currentTab === tab.id ? 'text-violet-500' : ''}`} />
                      {tab.label}
@@ -154,7 +164,7 @@ const DashboardLayout = ({ title, user, logout, currentTab, setTab, tabs, childr
                  ))}
                </nav>
              )}
-             <button onClick={logout} className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100">
+             <button onClick={logout} className="p-2 sm:p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100">
                 <LogOut className="w-5 h-5" />
              </button>
           </div>
@@ -162,15 +172,15 @@ const DashboardLayout = ({ title, user, logout, currentTab, setTab, tabs, childr
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden relative w-full scroll-smooth">
-           <div className="max-w-[1600px] mx-auto p-4 sm:p-8 pb-28 md:pb-8 min-h-full">
+           <div className="max-w-[1600px] mx-auto p-3 sm:p-6 md:p-8 pb-28 md:pb-8 min-h-full">
               {children}
            </div>
         </main>
 
-        {/* Mobile Bottom Nav - Floating Pill Style */}
+        {/* Mobile Bottom Nav */}
         {tabs && (
-          <div className="md:hidden flex-none fixed bottom-4 left-4 right-4 z-50">
-            <nav className="bg-white/90 backdrop-blur-xl border border-gray-200/50 shadow-2xl shadow-gray-300/50 rounded-2xl flex justify-around items-center px-2 py-3 safe-area-pb">
+          <div className="md:hidden flex-none fixed bottom-4 left-4 right-4 z-50 pointer-events-none">
+            <nav className="bg-white/95 backdrop-blur-xl border border-gray-200/50 shadow-2xl shadow-gray-300/50 rounded-2xl flex justify-around items-center px-2 py-3 safe-area-pb pointer-events-auto">
                 {tabs.map(tab => (
                 <button 
                     key={tab.id}
@@ -189,7 +199,115 @@ const DashboardLayout = ({ title, user, logout, currentTab, setTab, tabs, childr
   );
 };
 
-// --- COMPONENTS ---
+// --- MODALS ---
+
+const StockInModal = ({ isOpen, onClose, onConfirm, sku }) => {
+    const [qty, setQty] = useState('1');
+    const inputRef = useRef(null);
+  
+    useEffect(() => {
+      if (isOpen) {
+        setQty('1'); 
+        setTimeout(() => { if(inputRef.current) { inputRef.current.focus(); inputRef.current.select(); }}, 50);
+      }
+    }, [isOpen, sku]);
+  
+    if (!isOpen || !sku) return null;
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      const val = parseInt(qty);
+      if (!isNaN(val) && val > 0) { onConfirm(val); }
+    };
+  
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden scale-100 border border-white/20 ring-1 ring-black/5">
+          <div className="bg-blue-50/50 p-8 text-center border-b border-blue-100">
+              <h3 className="text-2xl font-bold text-gray-800 flex flex-col items-center gap-2">
+                  <div className="p-3 bg-blue-100 text-blue-600 rounded-full"><Download className="w-8 h-8"/></div>
+                  Stock In
+              </h3>
+              <p className="text-gray-500 text-sm mt-2 font-medium">Adding to Inventory</p>
+              <div className="mt-4 bg-white px-4 py-2 rounded-xl border border-gray-200 font-mono text-lg font-bold text-gray-800">{sku}</div>
+          </div>
+          <form onSubmit={handleSubmit} className="p-8">
+            <div className="flex justify-center mb-8 relative">
+              <input 
+                  ref={inputRef}
+                  type="number"
+                  min="1"
+                  className="w-40 text-center text-6xl font-bold text-blue-600 border-none outline-none bg-transparent focus:ring-0 placeholder-gray-200"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+              />
+              <span className="absolute bottom-2 text-sm font-bold text-gray-400 uppercase tracking-widest">Units</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <button type="button" onClick={onClose} className="py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition-colors">Cancel</button>
+              <button type="submit" className="py-4 text-white font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-95 bg-blue-600 hover:bg-blue-700 shadow-blue-200">
+                  Confirm
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+};
+
+const StockOutModal = ({ isOpen, onClose, onConfirm, sku }) => {
+    const [qty, setQty] = useState('1');
+    const inputRef = useRef(null);
+  
+    useEffect(() => {
+      if (isOpen) {
+        setQty('1'); 
+        setTimeout(() => { if(inputRef.current) { inputRef.current.focus(); inputRef.current.select(); }}, 50);
+      }
+    }, [isOpen, sku]);
+  
+    if (!isOpen || !sku) return null;
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      const val = parseInt(qty);
+      if (!isNaN(val) && val > 0) { onConfirm(val); }
+    };
+  
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden scale-100 border border-white/20 ring-1 ring-black/5">
+          <div className="bg-purple-50/50 p-8 text-center border-b border-purple-100">
+              <h3 className="text-2xl font-bold text-gray-800 flex flex-col items-center gap-2">
+                  <div className="p-3 bg-purple-100 text-purple-600 rounded-full"><Upload className="w-8 h-8"/></div>
+                  Stock Out
+              </h3>
+              <p className="text-gray-500 text-sm mt-2 font-medium">Removing from Inventory</p>
+              <div className="mt-4 bg-white px-4 py-2 rounded-xl border border-gray-200 font-mono text-lg font-bold text-gray-800">{sku}</div>
+          </div>
+          <form onSubmit={handleSubmit} className="p-8">
+            <div className="flex justify-center mb-8 relative">
+              <input 
+                  ref={inputRef}
+                  type="number"
+                  min="1"
+                  className="w-40 text-center text-6xl font-bold text-purple-600 border-none outline-none bg-transparent focus:ring-0 placeholder-gray-200"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+              />
+              <span className="absolute bottom-2 text-sm font-bold text-gray-400 uppercase tracking-widest">Units</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <button type="button" onClick={onClose} className="py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition-colors">Cancel</button>
+              <button type="submit" className="py-4 text-white font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-95 bg-purple-600 hover:bg-purple-700 shadow-purple-200">
+                  Confirm
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+};
 
 const PickModal = ({ isOpen, onClose, onConfirm, order, role }) => {
   const [pickQty, setPickQty] = useState('');
@@ -679,7 +797,7 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
                                         <div className="flex justify-between items-start mb-2">
                                             <p className="font-bold text-base">Instructions</p>
                                             <button onClick={downloadSampleTemplate} className="text-xs bg-white border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50 flex items-center gap-1 text-indigo-600 font-bold transition-colors">
-                                                <FileDown className="w-3 h-3" /> Template
+                                                <Download className="w-3 h-3" /> Template
                                             </button>
                                         </div>
                                         <p className="leading-relaxed">Upload an Excel file. Required columns: <strong>Master SKU</strong>, <strong>FG SKU</strong>, and <strong>SFG SKU</strong>.</p>
@@ -703,11 +821,11 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
                                 </div>
                             ) : (
                                 <div className="space-y-3 pt-2">
-                                    {history.length === 0 && <div className="text-center text-gray-400 py-12 flex flex-col items-center"><FileSpreadsheet className="w-10 h-10 opacity-20 mb-2"/>No upload history found.</div>}
+                                    {history.length === 0 && <div className="text-center text-gray-400 py-12 flex flex-col items-center"><FileText className="w-10 h-10 opacity-20 mb-2"/>No upload history found.</div>}
                                     {history.map((item) => (
                                         <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-all flex justify-between items-center group">
                                             <div className="min-w-0 pr-4">
-                                                <div className="flex items-center gap-2 mb-1"><div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><FileSpreadsheet className="w-4 h-4" /></div><span className="font-bold text-gray-700 truncate text-sm">{item.fileName}</span></div>
+                                                <div className="flex items-center gap-2 mb-1"><div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><FileText className="w-4 h-4" /></div><span className="font-bold text-gray-700 truncate text-sm">{item.fileName}</span></div>
                                                 <div className="text-xs text-gray-400 flex items-center gap-2 pl-1"><Clock className="w-3 h-3" /> {formatDate(item.uploadedAt)}</div>
                                             </div>
                                             <div className="flex gap-2">
@@ -790,7 +908,7 @@ const SettingsView = () => {
                     <h3 className="font-extrabold text-gray-800 mb-6 flex items-center gap-3 text-lg"><Plus className="w-6 h-6 text-blue-500" /> Add New Staff</h3>
                     <form onSubmit={handleAddStaff} className="space-y-5">
                         <div><label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Name</label><input type="text" className="w-full p-3.5 border border-gray-200 rounded-xl mt-1 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-gray-50 focus:bg-white transition-colors" placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Role</label><div className="relative"><select className="w-full p-3.5 border border-gray-200 rounded-xl mt-1 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-gray-50 appearance-none font-medium" value={newRole} onChange={(e) => setNewRole(e.target.value)}><option value="FG_STORE">Finished Goods</option><option value="SFG_STORE">Semi-Finished</option><option value="WIP_FLOOR">WIP Floor</option></select><ChevronRight className="absolute right-4 top-1/2 translate-y-0 text-gray-400 rotate-90 pointer-events-none w-4 h-4"/></div></div>
+                        <div><label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Role</label><div className="relative"><select className="w-full p-3.5 border border-gray-200 rounded-xl mt-1 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-gray-50 appearance-none font-medium" value={newRole} onChange={(e) => setNewRole(e.target.value)}><option value="FG_STORE">Finished Goods</option><option value="SFG_STORE">Semi-Finished</option><option value="WIP_FLOOR">WIP Floor</option><option value="STOCK_IN">Stock In</option><option value="STOCK_OUT">Stock Out</option></select><ChevronRight className="absolute right-4 top-1/2 translate-y-0 text-gray-400 rotate-90 pointer-events-none w-4 h-4"/></div></div>
                         <div><label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Password</label><input type="text" className="w-full p-3.5 border border-gray-200 rounded-xl mt-1 outline-none font-mono focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-gray-50 focus:bg-white transition-colors" placeholder="Set Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></div>
                         <button type="submit" disabled={loading} className="w-full p-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 hover:shadow-blue-300 active:scale-95 flex justify-center items-center">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create User'}</button>
                     </form>
@@ -803,7 +921,7 @@ const SettingsView = () => {
                         {staff.map(user => (
                             <div key={user.id} className="p-5 flex items-center justify-between hover:bg-gray-50 transition-colors group">
                                 <div className="flex items-center gap-5">
-                                    <div className={`p-3 rounded-2xl shadow-sm ${user.role === 'FG_STORE' ? 'bg-teal-100 text-teal-600' : user.role === 'SFG_STORE' ? 'bg-orange-100 text-orange-600' : 'bg-rose-100 text-rose-600'}`}>
+                                    <div className={`p-3 rounded-2xl shadow-sm ${user.role === 'FG_STORE' ? 'bg-teal-100 text-teal-600' : user.role === 'SFG_STORE' ? 'bg-orange-100 text-orange-600' : user.role === 'WIP_FLOOR' ? 'bg-rose-100 text-rose-600' : user.role === 'STOCK_IN' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                         <User className="w-6 h-6" />
                                     </div>
                                     <div>
@@ -877,7 +995,7 @@ const ReportsView = ({ allOrders, stats }) => {
                 </p>
             </div>
             <button onClick={handleExport} disabled={isLocked} className={`px-10 py-4 rounded-2xl font-bold flex items-center gap-3 transition-all text-lg shadow-lg ${isLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-teal-600 text-white hover:bg-teal-700 hover:scale-105 shadow-teal-200'}`}>
-                <FileSpreadsheet className="w-6 h-6" /> Download Excel Report
+                <FileText className="w-6 h-6" /> Download Excel Report
             </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1011,6 +1129,175 @@ const StatsView = ({ currentOrders }) => {
     );
 };
 
+// --- INVENTORY VIEW (NEW) ---
+const InventoryView = () => {
+    const [inventory, setInventory] = useState([]);
+    const [filter, setFilter] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+
+    useEffect(() => {
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'));
+        const unsub = onSnapshot(q, (snap) => {
+            setInventory(snap.docs.map(d => ({ sku: d.id, ...d.data() })));
+        });
+        return () => unsub();
+    }, []);
+
+    const handleInventoryUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!window.XLSX) {
+            alert("System still initializing. Please try again.");
+            return;
+        }
+
+        setIsUploading(true);
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = window.XLSX.utils.sheet_to_json(window.XLSX.read(evt.target.result, { type: 'binary' }).Sheets[window.XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]]);
+                const batch = writeBatch(db);
+                
+                data.forEach(row => {
+                    // Try to find SKU and Quantity columns flexibly
+                    const skuKey = Object.keys(row).find(k => k.toLowerCase().includes('sku'));
+                    const qtyKey = Object.keys(row).find(k => k.toLowerCase().includes('qty') || k.toLowerCase().includes('quantity') || k.toLowerCase().includes('stock'));
+                    
+                    if (skuKey && qtyKey) {
+                        const sku = String(row[skuKey]).trim();
+                        const qty = parseInt(row[qtyKey]);
+                        if (sku && !isNaN(qty)) {
+                             const ref = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', sku);
+                             // Overwrite or update? Usually inventory upload is a reset or adjustment. 
+                             // Using set without merge will overwrite. Using merge will update fields.
+                             // Let's assume overwrite for "Upload Existing Inventory" implies setting the current state.
+                             batch.set(ref, { 
+                                 quantity: qty, 
+                                 updatedAt: serverTimestamp(),
+                                 updatedBy: 'Admin Upload'
+                             });
+                        }
+                    }
+                });
+
+                await batch.commit();
+                alert("Inventory updated successfully!");
+            } catch (err) {
+                console.error(err);
+                alert("Failed to process inventory file.");
+            } finally {
+                setIsUploading(false);
+                e.target.value = null; // Reset input
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleInventoryExport = () => {
+        if (!window.XLSX) return;
+        const wsData = inventory.map(item => ({
+            'SKU': item.sku,
+            'Quantity': item.quantity,
+            'Last Updated': item.updatedAt ? formatDate(item.updatedAt) : ''
+        }));
+        const ws = window.XLSX.utils.json_to_sheet(wsData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Current Inventory");
+        window.XLSX.writeFile(wb, `Inventory_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
+    const downloadInventoryTemplate = () => {
+        if (!window.XLSX) return;
+        const wsData = [
+            { "SKU": "FG000001", "Quantity": 50 },
+            { "SKU": "SF000001", "Quantity": 100 }
+        ];
+        const ws = window.XLSX.utils.json_to_sheet(wsData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Inventory_Template");
+        window.XLSX.writeFile(wb, "Inventory_Upload_Template.xlsx");
+    };
+
+    const filteredInv = inventory.filter(i => i.sku.toLowerCase().includes(filter.toLowerCase()));
+    
+    // Calculate Stats
+    const totalStock = inventory.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+    const totalSkus = inventory.length;
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+             {/* Header Actions */}
+             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/40 flex flex-col md:flex-row justify-between items-center gap-4">
+                 <div className="flex items-center gap-4 w-full md:w-auto">
+                    <h3 className="font-extrabold text-gray-800 text-xl flex items-center gap-3"><Package className="w-6 h-6 text-indigo-500"/> Inventory Management</h3>
+                    <div className="flex gap-2">
+                        <button onClick={downloadInventoryTemplate} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition text-sm">
+                            <Download className="w-4 h-4" /> Template
+                        </button>
+                        
+                        <button onClick={() => document.getElementById('inv-upload').click()} disabled={isUploading} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold hover:bg-indigo-100 transition text-sm">
+                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4" />} Upload
+                        </button>
+                        <input id="inv-upload" type="file" className="hidden" onChange={handleInventoryUpload} accept=".xlsx,.xls" />
+                        
+                        <button onClick={handleInventoryExport} className="flex items-center gap-2 px-4 py-2 bg-teal-50 text-teal-600 rounded-xl font-bold hover:bg-teal-100 transition text-sm">
+                            <Download className="w-4 h-4" /> Export
+                        </button>
+                    </div>
+                 </div>
+                 <div className="relative w-full md:w-64">
+                    <input type="text" placeholder="Search Inventory..." className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-100" value={filter} onChange={e => setFilter(e.target.value)} />
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                 </div>
+             </div>
+             
+             {/* Stats Cards */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-3xl p-8 text-white shadow-2xl shadow-indigo-200/50 relative overflow-hidden group">
+                    <div className="relative z-10">
+                        <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest mb-2">Total Inventory Count</p>
+                        <p className="text-5xl font-extrabold tracking-tight">{totalStock.toLocaleString()}</p>
+                        <p className="text-xs text-indigo-200 font-medium mt-1">Units on hand</p>
+                    </div>
+                    <div className="absolute top-0 right-0 p-24 bg-white/10 rounded-full blur-3xl -mr-12 -mt-12 group-hover:bg-white/20 transition-colors"></div>
+                    <Package className="absolute bottom-6 right-6 w-12 h-12 text-indigo-200/20" />
+                </div>
+                
+                <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-xl shadow-gray-200/40 relative overflow-hidden">
+                    <div className="relative z-10">
+                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">Unique SKUs</p>
+                        <p className="text-5xl font-extrabold tracking-tight text-gray-800">{totalSkus.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 font-medium mt-1">Distinct items tracked</p>
+                    </div>
+                    <ScanBarcode className="absolute bottom-6 right-6 w-12 h-12 text-gray-100" />
+                </div>
+             </div>
+
+             {/* Table */}
+             <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/40 overflow-hidden">
+                <div className="overflow-x-auto max-h-[600px]">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50/80 text-gray-400 font-bold uppercase text-xs sticky top-0 backdrop-blur-sm z-10">
+                            <tr><th className="px-8 py-5">SKU</th><th className="px-8 py-5 text-right">Quantity</th><th className="px-8 py-5 text-right">Last Updated</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {filteredInv.length === 0 && <tr><td colSpan="3" className="text-center py-12 text-gray-400 italic">No inventory records found.</td></tr>}
+                            {filteredInv.map((item) => (
+                                <tr key={item.sku} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-8 py-5 font-mono font-bold text-gray-700">{item.sku}</td>
+                                    <td className="px-8 py-5 text-right font-extrabold text-indigo-600 text-lg">{item.quantity}</td>
+                                    <td className="px-8 py-5 text-right text-sm text-gray-400">{item.updatedAt ? formatDate(item.updatedAt) : '-'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+        </div>
+    )
+};
+
 // ... AdminDashboard ...
 const AdminDashboard = ({ user, logout }) => {
   const [view, setView] = useState('DASHBOARD');
@@ -1027,6 +1314,13 @@ const AdminDashboard = ({ user, logout }) => {
   const [completedUnits, setCompletedUnits] = useState(0);
   const [activeActivityTab, setActiveActivityTab] = useState('FG_STORE');
   const [lastUploadTime, setLastUploadTime] = useState(null); 
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
   useEffect(() => {
     if (!user || !db) return;
@@ -1261,8 +1555,9 @@ const AdminDashboard = ({ user, logout }) => {
         setTab={setView}
         tabs={[
             { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
-            { id: 'REPORTS', label: 'Reports', icon: FileSpreadsheet },
+            { id: 'REPORTS', label: 'Reports', icon: FileText }, // Replaced FileSpreadsheet
             { id: 'STATS', label: 'Stats', icon: BarChart3 },
+            { id: 'INVENTORY', label: 'Inventory', icon: Package }, 
             { id: 'SETTINGS', label: 'Settings', icon: Settings },
         ]}
     >
@@ -1270,6 +1565,7 @@ const AdminDashboard = ({ user, logout }) => {
 
         {view === 'REPORTS' && <ReportsView allOrders={allOrders} stats={stats} />}
         {view === 'STATS' && <StatsView currentOrders={allOrders} />}
+        {view === 'INVENTORY' && <InventoryView />}
         {view === 'SETTINGS' && <SettingsView />}
         
         {view === 'DASHBOARD' && (
@@ -1289,7 +1585,7 @@ const AdminDashboard = ({ user, logout }) => {
                     </div>
                 </div>
                 {fileName && !isUploading && (
-                    <div className="bg-violet-50 p-6 rounded-3xl shadow-sm border border-violet-100 flex justify-between items-center animate-in slide-in-from-top-4"><div className="flex items-center gap-4"><div className="p-3 bg-white rounded-2xl text-violet-600 shadow-sm"><FileSpreadsheet className="w-6 h-6"/></div><span className="font-bold text-violet-900 text-lg">{fileName}</span></div><button onClick={handleProcessUpload} className="bg-violet-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 hover:scale-105 transition-all">Process File</button></div>
+                    <div className="bg-violet-50 p-6 rounded-3xl shadow-sm border border-violet-100 flex justify-between items-center animate-in slide-in-from-top-4"><div className="flex items-center gap-4"><div className="p-3 bg-white rounded-2xl text-violet-600 shadow-sm"><FileText className="w-6 h-6"/></div><span className="font-bold text-violet-900 text-lg">{fileName}</span></div><button onClick={handleProcessUpload} className="bg-violet-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 hover:scale-105 transition-all">Process File</button></div>
                 )}
                 {isUploading && <div className="bg-blue-50 p-8 rounded-3xl text-blue-700 flex flex-col items-center gap-4 border border-blue-100"><Loader2 className="animate-spin w-10 h-10"/><span className="font-bold text-lg">Processing your data...</span></div>}
                 
@@ -1308,7 +1604,7 @@ const AdminDashboard = ({ user, logout }) => {
                             <p className="text-xs text-teal-50 font-medium mt-1">Total Units Done</p>
                         </div>
                         <div className="absolute top-0 right-0 p-24 bg-white/10 rounded-full blur-3xl -mr-12 -mt-12 group-hover:bg-white/20 transition-colors"></div>
-                        <CheckCircle2 className="absolute bottom-4 right-4 w-12 h-12 text-teal-200/20" />
+                        <CheckCircle className="absolute bottom-4 right-4 w-12 h-12 text-teal-200/20" />
                     </div>
                 </div>
 
@@ -1322,7 +1618,12 @@ const AdminDashboard = ({ user, logout }) => {
                                 <span className="font-bold text-gray-700">Finished Goods</span>
                             </div>
                             <p className="text-4xl font-extrabold text-gray-800 mb-1">{stats.fg.pending}</p>
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-4">Pending Units</p>
+                            
+                            <div className="flex justify-between items-end mb-2">
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wide">Pending Units</p>
+                                <span className="text-xs font-bold text-gray-500">{getPercentage(stats.fg.total, grandTotal)}% of Load</span>
+                            </div>
+
                             <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full shadow-[0_0_10px_rgba(20,184,166,0.5)]" style={{width: `${getPercentage(stats.fg.total, grandTotal)}%`}}></div></div>
                         </div>
                     </button>
@@ -1334,7 +1635,12 @@ const AdminDashboard = ({ user, logout }) => {
                                 <span className="font-bold text-gray-700">Semi-Finished</span>
                             </div>
                             <p className="text-4xl font-extrabold text-gray-800 mb-1">{stats.sfg.pending}</p>
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-4">Pending Units</p>
+
+                            <div className="flex justify-between items-end mb-2">
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wide">Pending Units</p>
+                                <span className="text-xs font-bold text-gray-500">{getPercentage(stats.sfg.total, grandTotal)}% of Load</span>
+                            </div>
+
                             <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-orange-500 rounded-full shadow-[0_0_10px_rgba(249,115,22,0.5)]" style={{width: `${getPercentage(stats.sfg.total, grandTotal)}%`}}></div></div>
                          </div>
                     </button>
@@ -1346,7 +1652,12 @@ const AdminDashboard = ({ user, logout }) => {
                                 <span className="font-bold text-gray-700">WIP Floor</span>
                             </div>
                             <p className="text-4xl font-extrabold text-gray-800 mb-1">{stats.wip.pending}</p>
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-4">Pending Units</p>
+
+                            <div className="flex justify-between items-end mb-2">
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wide">Pending Units</p>
+                                <span className="text-xs font-bold text-gray-500">{getPercentage(stats.wip.total, grandTotal)}% of Load</span>
+                            </div>
+
                             <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)]" style={{width: `${getPercentage(stats.wip.total, grandTotal)}%`}}></div></div>
                          </div>
                     </button>
@@ -1440,6 +1751,8 @@ const RoleSelection = ({ onSelectRole }) => {
                             { id: 'FG_STORE', label: 'Finished Goods', icon: Package, color: 'teal', desc: 'Manage FG Inventory' },
                             { id: 'SFG_STORE', label: 'Semi-Finished Store', icon: Truck, color: 'orange', desc: 'Manage SFG Logistics' },
                             { id: 'WIP_FLOOR', label: 'Production Floor', icon: Hammer, color: 'rose', desc: 'WIP Line Updates' },
+                            { id: 'STOCK_IN', label: 'Stock In', icon: Download, color: 'blue', desc: 'Add Inventory' }, // Replaced ArrowDownToLine with Download
+                            { id: 'STOCK_OUT', label: 'Stock Out', icon: Upload, color: 'purple', desc: 'Dispatch Inventory' },
                         ].map((role) => (
                             <button key={role.id} onClick={() => handleRoleClick(role.id)} className={`w-full flex items-center gap-5 p-5 border rounded-2xl transition-all hover:scale-[1.02] group bg-white hover:bg-gray-50 border-white/10 shadow-sm`}>
                                 <div className={`p-3.5 rounded-xl bg-${role.color}-100 text-${role.color}-600 shrink-0 shadow-sm`}><role.icon className="w-6 h-6" /></div>
@@ -1464,7 +1777,10 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const [selectedPortal, setSelectedPortal] = useState(null);
   const [selectedMasterSku, setSelectedMasterSku] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [stockInModalOpen, setStockInModalOpen] = useState(false);
+  const [stockOutModalOpen, setStockOutModalOpen] = useState(false);
   const [targetOrder, setTargetOrder] = useState(null);
+  const [targetStockSku, setTargetStockSku] = useState(null);
   const [scanQuery, setScanQuery] = useState('');
   const [manualMode, setManualMode] = useState(false);
   const [skuMappings, setSkuMappings] = useState({});
@@ -1495,7 +1811,10 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   }, []);
 
   useEffect(() => {
-    if (!db) return;
+    if (!db || role === 'STOCK_IN' || role === 'STOCK_OUT') {
+        setLoading(false);
+        return;
+    }
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_orders'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1510,7 +1829,19 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     return orders;
   }, [orders, role, selectedPortal]);
 
-  // MOVED FUNCTIONS UP: Defined these before processScan so they are accessible
+  const updateInventory = async (sku, change) => {
+      try {
+          const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', sku);
+          await setDoc(invRef, {
+              quantity: increment(change),
+              updatedAt: serverTimestamp(),
+              updatedBy: 'Auto Deduct'
+          }, { merge: true });
+      } catch (e) {
+          console.error("Failed to update inventory", e);
+      }
+  };
+
   const completeOrder = async (orderId, status) => {
       try {
         const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_orders', orderId);
@@ -1537,6 +1868,45 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
       } catch (error) { console.error("Error:", error); }
   };
 
+  const handleStockIn = async (qty) => {
+      if (!targetStockSku) return;
+      try {
+          const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', targetStockSku);
+          await setDoc(invRef, {
+              quantity: increment(qty),
+              updatedAt: serverTimestamp(),
+              updatedBy: loggedInUser ? loggedInUser.name : 'Staff'
+          }, { merge: true });
+          setStockInModalOpen(false);
+          setTargetStockSku(null);
+          setScanQuery('');
+          alert(`Added ${qty} units to ${targetStockSku}`);
+      } catch (error) {
+          console.error("Stock in error:", error);
+      }
+  };
+
+  const handleStockOut = async (qty) => {
+    if (!targetStockSku) return;
+    try {
+        const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', targetStockSku);
+        // Check if sufficient stock exists (optional, currently allowing negative stock)
+        // For strict control, we'd need a transaction or security rule.
+        // Here we just decrement.
+        await setDoc(invRef, {
+            quantity: increment(-qty), // Decrementing
+            updatedAt: serverTimestamp(),
+            updatedBy: loggedInUser ? loggedInUser.name : 'Staff'
+        }, { merge: true });
+        setStockOutModalOpen(false);
+        setTargetStockSku(null);
+        setScanQuery('');
+        alert(`Removed ${qty} units of ${targetStockSku}`);
+    } catch (error) {
+        console.error("Stock out error:", error);
+    }
+  };
+
   const initiateMarkOut = (order) => {
     if (role !== 'WIP_FLOOR' && order.status === 'COMPLETED') return;
     if (role === 'WIP_FLOOR' && order.status === 'COMPLETED') return;
@@ -1554,13 +1924,24 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     }
   };
 
-  // NEW: Process Scan Logic (now defined after helper functions)
   const processScan = (code) => {
     if (!code) return;
     const raw = code.trim().toUpperCase();
+    const mappedMaster = skuMappings[raw];
+    const resolvedSku = mappedMaster || raw; 
+
+    if (role === 'STOCK_IN') {
+        setTargetStockSku(resolvedSku);
+        setStockInModalOpen(true);
+        return;
+    }
+
+    if (role === 'STOCK_OUT') {
+        setTargetStockSku(resolvedSku);
+        setStockOutModalOpen(true);
+        return;
+    }
     
-    // Strategy 1: Direct lookup in current orders (Master, FG, or SFG)
-    // This uses the data already on the order document
     let match = currentViewOrders.find(o => 
         (o.sku.toUpperCase() === raw || 
          (o.fgSku && o.fgSku.toUpperCase() === raw) || 
@@ -1568,9 +1949,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         o.status !== 'COMPLETED'
     );
 
-    // Strategy 2: Use Mapping Database (Fallback if not found directly on order fields)
     if (!match) {
-        const mappedMaster = skuMappings[raw];
         if (mappedMaster) {
             match = currentViewOrders.find(o => 
                 o.sku.toUpperCase() === mappedMaster.toUpperCase() && 
@@ -1581,26 +1960,21 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
     if (match) {
         if (match.quantity === 1) {
-            // Auto-pick
             initiateMarkOut(match);
         } else {
-            // Filter view for manual picking
             setScanQuery(match.sku);
         }
     } else {
-        // Just filter view (maybe completed or invalid)
-        // If mapped, show master, else show raw
-        const mapped = skuMappings[raw];
-        setScanQuery(mapped || raw);
+        setScanQuery(resolvedSku);
     }
   };
 
   useEffect(() => {
-    if (!modalOpen && !loading && selectedPortal !== undefined) {
+    if (!modalOpen && !stockInModalOpen && !stockOutModalOpen && !loading && selectedPortal !== undefined) {
         const timer = setTimeout(() => { if (scanInputRef.current && !manualMode) scanInputRef.current.focus(); }, 200);
         return () => clearTimeout(timer);
     }
-  }, [modalOpen, loading, selectedPortal, role, manualMode]);
+  }, [modalOpen, stockInModalOpen, stockOutModalOpen, loading, selectedPortal, role, manualMode]);
 
   const toggleInputMode = () => {
     setManualMode(prev => !prev);
@@ -1610,22 +1984,16 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     }
   };
 
-  // Handle input change with auto-scan attempt
   const handleInputChange = (e) => {
       const val = e.target.value;
       setScanQuery(val);
       if(scanError) setScanError(null);
-      
-      // Auto-scan logic: If it looks like a full code (e.g. > 3 chars), try to process after a debounce
-      // Clear existing timeout
       if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-      
-      // Set new timeout
       scanTimeoutRef.current = setTimeout(() => {
           if(val.length > 3) {
              processScan(val);
           }
-      }, 800); // 800ms pause implies end of scan or typing
+      }, 800); 
   };
 
   const handleModalConfirm = (pickQty) => {
@@ -1644,6 +2012,8 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const getRoleTitle = () => {
     if (role === 'FG_STORE') return 'Finished Goods Store';
     if (role === 'SFG_STORE') return 'Semi-Finished Store';
+    if (role === 'STOCK_IN') return 'Stock In (Inventory)';
+    if (role === 'STOCK_OUT') return 'Stock Out (Dispatch)';
     return 'WIP / Production Floor';
   };
 
@@ -1670,6 +2040,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   }, [portalGroups]);
 
   const masterSkuStats = useMemo(() => {
+    if (role === 'STOCK_IN' || role === 'STOCK_OUT') return {};
     const stats = {};
     currentViewOrders.forEach(order => {
         if (order.status === 'COMPLETED') return;
@@ -1678,9 +2049,10 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         stats[master] += (order.quantity || 0);
     });
     return stats;
-  }, [currentViewOrders]);
+  }, [currentViewOrders, role]);
 
   const displayOrders = useMemo(() => {
+    if (role === 'STOCK_IN' || role === 'STOCK_OUT') return [];
     let list = currentViewOrders;
     if (selectedMasterSku) list = list.filter(o => getMasterSku(o.sku) === selectedMasterSku);
     if (scanQuery) {
@@ -1693,10 +2065,12 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         if (statusDiff !== 0) return statusDiff;
         return a.sku.localeCompare(b.sku);
     });
-  }, [currentViewOrders, selectedMasterSku, scanQuery, manualMode]);
+  }, [currentViewOrders, selectedMasterSku, scanQuery, manualMode, role]);
 
   const styles = role === 'FG_STORE' ? { bg: 'bg-gradient-to-r from-teal-500 to-emerald-500', btn: 'text-teal-600 border-teal-100' } 
                 : role === 'SFG_STORE' ? { bg: 'bg-gradient-to-r from-orange-500 to-amber-500', btn: 'text-orange-600 border-orange-100' } 
+                : role === 'STOCK_IN' ? { bg: 'bg-gradient-to-r from-blue-600 to-indigo-600', btn: 'text-blue-600 border-blue-100' }
+                : role === 'STOCK_OUT' ? { bg: 'bg-gradient-to-r from-purple-600 to-violet-600', btn: 'text-purple-600 border-purple-100' }
                 : { bg: 'bg-gradient-to-r from-rose-500 to-pink-600', btn: 'text-rose-600 border-rose-100' };
 
   if (role === 'FG_STORE' && !selectedPortal) {
@@ -1741,6 +2115,8 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   return (
     <div className="min-h-screen h-[100dvh] bg-gray-50 flex flex-col font-sans overflow-hidden w-full max-w-[100vw]">
       <PickModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handleModalConfirm} order={targetOrder} role={role} />
+      <StockInModal isOpen={stockInModalOpen} onClose={() => setStockInModalOpen(false)} onConfirm={handleStockIn} sku={targetStockSku} />
+      <StockOutModal isOpen={stockOutModalOpen} onClose={() => setStockOutModalOpen(false)} onConfirm={handleStockOut} sku={targetStockSku} />
       
       {/* HEADER */}
       <div className={`${styles.bg} text-white p-4 shadow-xl flex-none z-20 w-full`}>
@@ -1750,11 +2126,15 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
               {role === 'FG_STORE' && selectedPortal && <button onClick={() => setSelectedPortal(null)} className="p-2 -ml-2 mr-1 hover:bg-white/20 rounded-full shrink-0 backdrop-blur-md transition-colors"><ArrowLeft className="w-6 h-6" /></button>}
               <h2 className="text-xl sm:text-2xl font-black tracking-tight truncate">{role === 'FG_STORE' ? selectedPortal : getRoleTitle()}</h2>
             </div>
-            <div className="flex gap-3 text-xs sm:text-sm font-medium text-white/80 truncate mt-1">
-                <span className="truncate">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
-                <span className="opacity-40">|</span>
-                <span className="truncate bg-white/20 px-2 rounded-md text-white font-bold">{displayOrders.filter(o => o.status !== 'COMPLETED').length} Pending</span>
-            </div>
+            {role !== 'STOCK_IN' && role !== 'STOCK_OUT' && (
+                <div className="flex gap-3 text-xs sm:text-sm font-medium text-white/80 truncate mt-1">
+                    <span className="truncate">{loggedInUser ? loggedInUser.name : 'Staff'}</span>
+                    <span className="opacity-40">|</span>
+                    <span className="truncate bg-white/20 px-2 rounded-md text-white font-bold">{displayOrders.filter(o => o.status !== 'COMPLETED').length} Pending</span>
+                </div>
+            )}
+            {role === 'STOCK_IN' && <div className="text-xs sm:text-sm font-medium text-white/80 truncate mt-1">Ready to receive inventory</div>}
+            {role === 'STOCK_OUT' && <div className="text-xs sm:text-sm font-medium text-white/80 truncate mt-1">Ready to dispatch inventory</div>}
           </div>
           <button onClick={logout} className="p-3 bg-white/20 rounded-xl hover:bg-white/30 shrink-0 ml-2 backdrop-blur-md transition-colors"><LogOut className="w-5 h-5" /></button>
         </div>
@@ -1771,7 +2151,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
                 <input 
                     ref={scanInputRef} 
                     type="text" 
-                    placeholder={manualMode ? "Search SKU..." : "Ready to Scan..."} 
+                    placeholder={manualMode ? (role === 'STOCK_IN' || role === 'STOCK_OUT' ? "Type SKU..." : "Search SKU...") : "Ready to Scan..."} 
                     className="flex-1 bg-transparent outline-none font-mono text-lg text-gray-800 font-bold w-full placeholder-gray-400" 
                     value={scanQuery} 
                     onChange={handleInputChange} 
@@ -1784,8 +2164,8 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         </div>
         {scanError && <div className="bg-red-50 text-red-500 text-xs font-bold mt-2 ml-2 py-1 px-3 rounded-lg inline-block animate-bounce">{scanError}</div>}
 
-        {/* Master SKU Filter */}
-        {Object.keys(masterSkuStats).length > 0 && (
+        {/* Master SKU Filter - Hidden for Stock In/Out */}
+        {role !== 'STOCK_IN' && role !== 'STOCK_OUT' && Object.keys(masterSkuStats).length > 0 && (
           <div className="w-full overflow-x-auto pb-2 pt-4 scrollbar-hide snap-x touch-pan-x">
              <div className="flex gap-3 min-w-min">
              <button onClick={() => setSelectedMasterSku(null)} className={`snap-start flex-shrink-0 px-5 py-3 rounded-2xl font-bold text-sm border transition-all ${!selectedMasterSku ? 'bg-gray-800 text-white border-gray-800 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
@@ -1805,65 +2185,79 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-y-auto p-4 w-full max-w-[1600px] mx-auto">
-        <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-20" : "pb-20"}>
-            {displayOrders.length === 0 && (
-                <div className="col-span-full py-20 text-center text-gray-400 flex flex-col items-center justify-center bg-white rounded-3xl border-2 border-dashed border-gray-200 mx-4">
-                    <div className="p-4 bg-gray-50 rounded-full mb-4"><CheckCircle2 className="w-12 h-12 opacity-20" /></div>
-                    <p className="font-medium text-lg">No tasks found</p>
-                    <p className="text-sm opacity-60">Adjust filters or scan a new item</p>
-                </div>
-            )}
-            {displayOrders.map(order => {
-              const isCompleted = order.status === 'COMPLETED';
-              const isWipProcess = order.status === 'WIP_PROCESSING';
-              const displayFG = reverseMappings[order.sku]?.FG;
-              const displaySFG = reverseMappings[order.sku]?.SFG;
-
-              return (
-                <div key={order.id} className={`p-6 rounded-3xl border transition-all duration-300 flex flex-col justify-between h-full relative overflow-hidden ${isCompleted ? 'bg-gray-50/80 border-gray-200 opacity-70 grayscale' : (isWipProcess ? 'bg-blue-50 border-blue-200 shadow-md ring-2 ring-blue-100' : 'bg-white border-gray-100 shadow-lg shadow-gray-200/50 hover:shadow-xl hover:scale-[1.01]')}`}>
-                  {isWipProcess && <div className="absolute top-0 right-0 p-2 bg-blue-100 rounded-bl-2xl text-blue-600"><Loader2 className="w-5 h-5 animate-spin"/></div>}
-                  
-                  <div className="flex justify-between items-start mb-4 relative z-10">
-                    <div className="flex-1 min-w-0 pr-2">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className={`inline-block px-2.5 py-1 text-[10px] font-extrabold rounded-lg uppercase tracking-wider ${isCompleted ? 'bg-teal-100 text-teal-700' : (isWipProcess ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500')}`}>
-                              {isCompleted ? 'Done' : (isWipProcess ? 'Processing' : (order.portal || 'Standard'))}
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-bold bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">{getMasterSku(order.sku)}</span>
-                        </div>
-                        <h3 className={`text-xl font-black font-mono tracking-tight truncate ${isCompleted ? 'text-gray-400 line-through decoration-2' : 'text-gray-800'}`}>{order.sku}</h3>
-                        
-                        <div className="flex flex-wrap gap-2 mt-2">
-                            {role === 'FG_STORE' && displayFG && (
-                                <div className="text-[10px] font-mono text-teal-600 bg-teal-50 px-2 py-1 rounded border border-teal-100 font-bold">FG: {displayFG}</div>
-                            )}
-                            {role === 'SFG_STORE' && displaySFG && (
-                                <div className="text-[10px] font-mono text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-100 font-bold">SFG: {displaySFG}</div>
-                            )}
-                        </div>
+        {role === 'STOCK_IN' ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 pb-20">
+                <Package className="w-24 h-24 mb-4 opacity-20" />
+                <h3 className="text-xl font-bold text-gray-500">Ready to Receive</h3>
+                <p className="max-w-xs text-center mt-2 opacity-60">Scan any FG, SFG, or Master SKU to add it to the inventory.</p>
+            </div>
+        ) : role === 'STOCK_OUT' ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 pb-20">
+                <Upload className="w-24 h-24 mb-4 opacity-20" />
+                <h3 className="text-xl font-bold text-gray-500">Ready to Dispatch</h3>
+                <p className="max-w-xs text-center mt-2 opacity-60">Scan any SKU to remove it from the inventory.</p>
+            </div>
+        ) : (
+            <div className={displayOrders.length > 0 ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-20" : "pb-20"}>
+                {displayOrders.length === 0 && (
+                    <div className="col-span-full py-20 text-center text-gray-400 flex flex-col items-center justify-center bg-white rounded-3xl border-2 border-dashed border-gray-200 mx-4">
+                        <div className="p-4 bg-gray-50 rounded-full mb-4"><CheckCircle className="w-12 h-12 opacity-20" /></div>
+                        <p className="font-medium text-lg">No tasks found</p>
+                        <p className="text-sm opacity-60">Adjust filters or scan a new item</p>
                     </div>
-                    {isCompleted && <div className="bg-teal-100 p-2 rounded-full text-teal-600"><CheckCheck className="w-6 h-6" /></div>}
-                  </div>
+                )}
+                {displayOrders.map(order => {
+                const isCompleted = order.status === 'COMPLETED';
+                const isWipProcess = order.status === 'WIP_PROCESSING';
+                const displayFG = reverseMappings[order.sku]?.FG;
+                const displaySFG = reverseMappings[order.sku]?.SFG;
 
-                  <div className="flex items-end justify-between pt-4 border-t border-gray-100 mt-auto relative z-10">
-                    <div>
-                        <span className="text-[10px] text-gray-400 uppercase font-extrabold tracking-wider">Quantity</span>
-                        <div className={`text-3xl font-black leading-none mt-0.5 ${isCompleted ? 'text-teal-600' : 'text-gray-900'}`}>{order.quantity}</div>
-                    </div>
+                return (
+                    <div key={order.id} className={`p-6 rounded-3xl border transition-all duration-300 flex flex-col justify-between h-full relative overflow-hidden ${isCompleted ? 'bg-gray-50/80 border-gray-200 opacity-70 grayscale' : (isWipProcess ? 'bg-blue-50 border-blue-200 shadow-md ring-2 ring-blue-100' : 'bg-white border-gray-100 shadow-lg shadow-gray-200/50 hover:shadow-xl hover:scale-[1.01]')}`}>
+                    {isWipProcess && <div className="absolute top-0 right-0 p-2 bg-blue-100 rounded-bl-2xl text-blue-600"><Loader2 className="w-5 h-5 animate-spin"/></div>}
                     
-                    {!isCompleted && (
-                        <button 
-                            onClick={() => initiateMarkOut(order)} 
-                            className={`px-5 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 flex items-center gap-2 shadow-md ${isWipProcess ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-gray-900 text-white hover:bg-black shadow-gray-300'}`}
-                        >
-                            {isWipProcess ? 'Finish' : 'Pick'} <ArrowLeft className="w-4 h-4 rotate-180" />
-                        </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
+                    <div className="flex justify-between items-start mb-4 relative z-10">
+                        <div className="flex-1 min-w-0 pr-2">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className={`inline-block px-2.5 py-1 text-[10px] font-extrabold rounded-lg uppercase tracking-wider ${isCompleted ? 'bg-teal-100 text-teal-700' : (isWipProcess ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500')}`}>
+                                {isCompleted ? 'Done' : (isWipProcess ? 'Processing' : (order.portal || 'Standard'))}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-bold bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">{getMasterSku(order.sku)}</span>
+                            </div>
+                            <h3 className={`text-xl font-black font-mono tracking-tight truncate ${isCompleted ? 'text-gray-400 line-through decoration-2' : 'text-gray-800'}`}>{order.sku}</h3>
+                            
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                {role === 'FG_STORE' && displayFG && (
+                                    <div className="text-[10px] font-mono text-teal-600 bg-teal-50 px-2 py-1 rounded border border-teal-100 font-bold">FG: {displayFG}</div>
+                                )}
+                                {role === 'SFG_STORE' && displaySFG && (
+                                    <div className="text-[10px] font-mono text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-100 font-bold">SFG: {displaySFG}</div>
+                                )}
+                            </div>
+                        </div>
+                        {isCompleted && <div className="bg-teal-100 p-2 rounded-full text-teal-600"><CheckCircle className="w-6 h-6" /></div>}
+                    </div>
+
+                    <div className="flex items-end justify-between pt-4 border-t border-gray-100 mt-auto relative z-10">
+                        <div>
+                            <span className="text-[10px] text-gray-400 uppercase font-extrabold tracking-wider">Quantity</span>
+                            <div className={`text-3xl font-black leading-none mt-0.5 ${isCompleted ? 'text-teal-600' : 'text-gray-900'}`}>{order.quantity}</div>
+                        </div>
+                        
+                        {!isCompleted && (
+                            <button 
+                                onClick={() => initiateMarkOut(order)} 
+                                className={`px-5 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 flex items-center gap-2 shadow-md ${isWipProcess ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-gray-900 text-white hover:bg-black shadow-gray-300'}`}
+                            >
+                                {isWipProcess ? 'Finish' : 'Pick'} <ArrowLeft className="w-4 h-4 rotate-180" />
+                            </button>
+                        )}
+                    </div>
+                    </div>
+                );
+                })}
+            </div>
+        )}
       </div>
     </div>
   );
