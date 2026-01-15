@@ -1868,40 +1868,62 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
       } catch (error) { console.error("Error:", error); }
   };
 
-  const handleStockIn = async (qty) => {
-      if (!targetStockSku) return;
-      try {
-          const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', targetStockSku);
-          await setDoc(invRef, {
-              quantity: increment(qty),
-              updatedAt: serverTimestamp(),
-              updatedBy: loggedInUser ? loggedInUser.name : 'Staff'
-          }, { merge: true });
-          setStockInModalOpen(false);
-          setTargetStockSku(null);
-          setScanQuery('');
-          alert(`Added ${qty} units to ${targetStockSku}`);
-      } catch (error) {
-          console.error("Stock in error:", error);
-      }
-  };
+  const handleStockIn = async (qty, directSku = null) => {
+    // If directSku is passed (from Auto Scan), use it. Otherwise use the state (from Modal).
+    const skuToUpdate = directSku || targetStockSku;
+    
+    if (!skuToUpdate) return;
 
-  const handleStockOut = async (qty) => {
-    if (!targetStockSku) return;
     try {
-        const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', targetStockSku);
-        // Check if sufficient stock exists (optional, currently allowing negative stock)
-        // For strict control, we'd need a transaction or security rule.
-        // Here we just decrement.
+        const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', skuToUpdate);
+        await setDoc(invRef, {
+            quantity: increment(qty),
+            updatedAt: serverTimestamp(),
+            updatedBy: loggedInUser ? loggedInUser.name : 'Staff'
+        }, { merge: true });
+
+        // IF AUTO SCAN (directSku exists): Just clear input so they can scan again immediately
+        if (directSku) {
+            setScanQuery('');
+            // We do NOT show an alert here to keep the scanning flow fast.
+            // If you want a sound or small toast, add it here.
+        } 
+        // IF MANUAL (Modal): Close modal and show alert
+        else {
+            setStockInModalOpen(false);
+            setTargetStockSku(null);
+            setScanQuery('');
+            alert(`Added ${qty} units to ${skuToUpdate}`);
+        }
+    } catch (error) {
+        console.error("Stock in error:", error);
+    }
+};
+const handleStockOut = async (qty, directSku = null) => {
+    // If directSku is passed (from Auto Scan), use it. Otherwise use the state (from Modal).
+    const skuToUpdate = directSku || targetStockSku;
+
+    if (!skuToUpdate) return;
+
+    try {
+        const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', skuToUpdate);
         await setDoc(invRef, {
             quantity: increment(-qty), // Decrementing
             updatedAt: serverTimestamp(),
             updatedBy: loggedInUser ? loggedInUser.name : 'Staff'
         }, { merge: true });
-        setStockOutModalOpen(false);
-        setTargetStockSku(null);
-        setScanQuery('');
-        alert(`Removed ${qty} units of ${targetStockSku}`);
+
+        // IF AUTO SCAN (directSku exists): Just clear input
+        if (directSku) {
+            setScanQuery('');
+        } 
+        // IF MANUAL (Modal): Close modal and show alert
+        else {
+            setStockOutModalOpen(false);
+            setTargetStockSku(null);
+            setScanQuery('');
+            alert(`Removed ${qty} units of ${skuToUpdate}`);
+        }
     } catch (error) {
         console.error("Stock out error:", error);
     }
@@ -1926,22 +1948,32 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
 
   const processScan = (code) => {
     if (!code) return;
-    const raw = code.trim().toUpperCase();
+    
+    // 1. Clean the input: ensure it is a string, remove spaces, and make uppercase
+    const raw = String(code).trim().toUpperCase();
+    
+    // 2. Look up the Master SKU in your mapping list
     const mappedMaster = skuMappings[raw];
-    const resolvedSku = mappedMaster || raw; 
+    
+    // 3. Determine the final SKU to use:
+    // If a Master SKU is found in the map, use it. Otherwise, use the scanned code.
+    const resolvedSku = mappedMaster ? mappedMaster : raw; 
 
+    // --- AUTO SCAN LOGIC START ---
     if (role === 'STOCK_IN') {
-        setTargetStockSku(resolvedSku);
-        setStockInModalOpen(true);
+        // This sends the RESOLVED SKU (Master) to the inventory function
+        handleStockIn(1, resolvedSku);
         return;
     }
 
     if (role === 'STOCK_OUT') {
-        setTargetStockSku(resolvedSku);
-        setStockOutModalOpen(true);
+        // This sends the RESOLVED SKU (Master) to the inventory function
+        handleStockOut(1, resolvedSku);
         return;
     }
+    // --- AUTO SCAN LOGIC END ---
     
+    // --- EXISTING LOGIC FOR PICKING/WIP ---
     let match = currentViewOrders.find(o => 
         (o.sku.toUpperCase() === raw || 
          (o.fgSku && o.fgSku.toUpperCase() === raw) || 
@@ -1965,22 +1997,8 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             setScanQuery(match.sku);
         }
     } else {
+        // If no order match, fill the search box with the RESOLVED SKU
         setScanQuery(resolvedSku);
-    }
-  };
-
-  useEffect(() => {
-    if (!modalOpen && !stockInModalOpen && !stockOutModalOpen && !loading && selectedPortal !== undefined) {
-        const timer = setTimeout(() => { if (scanInputRef.current && !manualMode) scanInputRef.current.focus(); }, 200);
-        return () => clearTimeout(timer);
-    }
-  }, [modalOpen, stockInModalOpen, stockOutModalOpen, loading, selectedPortal, role, manualMode]);
-
-  const toggleInputMode = () => {
-    setManualMode(prev => !prev);
-    if (scanInputRef.current) {
-        scanInputRef.current.blur();
-        setTimeout(() => { if(scanInputRef.current) scanInputRef.current.focus(); }, 50);
     }
   };
 
