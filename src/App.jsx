@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
-  signInAnonymously, 
+  signInAnonymously,
+  signInWithCustomToken, 
   onAuthStateChanged,
 } from "firebase/auth";
 import { 
@@ -34,7 +35,8 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
-const firebaseConfig = {
+// Using the provided config as fallback, or environment config if available
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyD_FBXkrMiZS-LiMlsdHVGOSL5cY57bLBk",
   authDomain: "hvg-warehouse.firebaseapp.com",
   projectId: "hvg-warehouse",
@@ -48,7 +50,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const appId = "hv-global-warehouse-ops-v1"; 
+// Use environment appId if available, otherwise use your custom ID
+const appId = typeof __app_id !== 'undefined' ? __app_id : "hv-global-warehouse-ops-v1"; 
 
 // --- UTILITIES ---
 const parseQty = (val) => {
@@ -330,7 +333,7 @@ const PickModal = ({ isOpen, onClose, onConfirm, order, role }) => {
 
   let buttonText = "Confirm Pick";
   let buttonColor = "bg-violet-600 hover:bg-violet-700 shadow-violet-200";
-   
+    
   if (role === 'WIP_FLOOR') {
       if (order.status === 'PENDING') { buttonText = "Start Process"; buttonColor = "bg-orange-500 hover:bg-orange-600 shadow-orange-200"; }
       else if (order.status === 'WIP_PROCESSING') { buttonText = "Finish Process"; buttonColor = "bg-teal-600 hover:bg-teal-700 shadow-teal-200"; }
@@ -502,10 +505,16 @@ const LoginModal = ({ isOpen, onClose, role, onLoginSuccess }) => {
     if (isOpen && role !== 'ADMIN') {
         setLoading(true);
         // Fetch users for this role
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'), where('role', '==', role));
+        // FIX: Removed "where" clause which might require index. Filter in JS instead.
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff_directory'));
         getDocs(q).then(snap => {
-            const staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setUsers(staffList);
+            const allStaff = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Filter locally
+            const roleStaff = allStaff.filter(s => s.role === role);
+            setUsers(roleStaff);
+            setLoading(false);
+        }).catch(err => {
+            console.error("Error fetching staff:", err);
             setLoading(false);
         });
     }
@@ -623,9 +632,17 @@ const SkuMappingModal = ({ isOpen, onClose }) => {
 
     useEffect(() => {
         if (!isAuthenticated) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'), orderBy('uploadedAt', 'desc'));
+        // FIX: Removed orderBy which requires an index. Sort in JS.
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sku_upload_history'));
         const unsubscribe = onSnapshot(q, (snap) => {
-            setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sort by uploadedAt descending
+            data.sort((a, b) => {
+                const tA = a.uploadedAt?.seconds || 0;
+                const tB = b.uploadedAt?.seconds || 0;
+                return tB - tA;
+            });
+            setHistory(data);
         });
         return () => unsubscribe();
     }, [isAuthenticated]);
@@ -1030,105 +1047,6 @@ const ReportsView = ({ allOrders, stats }) => {
     );
 };
 
-const StatsView = ({ currentOrders }) => {
-    // ... same logic
-    const [history, setHistory] = useState([]);
-    const [filter, setFilter] = useState(7); 
-
-    useEffect(() => {
-        if (!db) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            setHistory(data);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    const today = new Date().toISOString().split('T')[0];
-    
-    const liveToday = useMemo(() => {
-        if (!currentOrders || currentOrders.length === 0) return null;
-        return {
-            id: 'live-today',
-            day: today,
-            date: today,
-            total: currentOrders.length,
-            units: currentOrders.reduce((a,b) => a + (b.quantity||0), 0),
-            fg: currentOrders.filter(o => o.category === 'FG_STORE').length,
-            sfg: currentOrders.filter(o => o.category === 'SFG_STORE').length,
-            wip: currentOrders.filter(o => o.category === 'WIP_FLOOR').length,
-            completed: currentOrders.filter(o => o.status === 'COMPLETED').length
-        };
-    }, [currentOrders, today]);
-
-    const combinedHistory = useMemo(() => {
-        const past = history.filter(h => h.date !== today);
-        if (liveToday) return [...past, liveToday];
-        return past;
-    }, [history, liveToday, today]);
-
-    const filteredHistory = useMemo(() => {
-        if (filter === 'ALL') return combinedHistory;
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - filter);
-        return combinedHistory.filter(item => new Date(item.date) >= cutoff);
-    }, [combinedHistory, filter]);
-
-    const aggregate = useMemo(() => {
-        return filteredHistory.reduce((acc, curr) => ({
-            total: acc.total + (curr.total || 0),
-            units: acc.units + (curr.units || 0),
-            fg: acc.fg + (curr.fg || 0),
-            sfg: acc.sfg + (curr.sfg || 0),
-            wip: acc.wip + (curr.wip || 0),
-            completed: acc.completed + (curr.completed || 0),
-        }), { total: 0, units: 0, fg: 0, sfg: 0, wip: 0, completed: 0 });
-    }, [filteredHistory]);
-
-    return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-2 rounded-2xl border border-gray-100 shadow-lg shadow-gray-200/40 gap-4">
-                <div className="flex p-1 bg-gray-100 rounded-xl w-full sm:w-auto">
-                    {[7, 30, 'ALL'].map((f) => (
-                        <button key={f} onClick={() => setFilter(f)} className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${filter === f ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            {f === 'ALL' ? 'All Time' : `Last ${f} Days`}
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100"><p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Units</p><p className="text-4xl font-extrabold text-gray-800 mt-2">{aggregate.units.toLocaleString()}</p></div>
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100"><p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Completion Rate</p><p className="text-4xl font-extrabold text-teal-500 mt-2">{aggregate.total ? Math.round((aggregate.completed / aggregate.total) * 100) : 0}%</p></div>
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100"><p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Orders</p><p className="text-4xl font-extrabold text-blue-500 mt-2">{aggregate.total.toLocaleString()}</p></div>
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100"><p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Avg Daily Units</p><p className="text-4xl font-extrabold text-violet-500 mt-2">{filteredHistory.length ? Math.round(aggregate.units / filteredHistory.length) : 0}</p></div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/40">
-                    <h3 className="font-extrabold text-gray-800 mb-8 flex items-center gap-3 text-lg"><PieChart className="w-6 h-6 text-violet-500" /> Category Split</h3>
-                    <div className="space-y-6">
-                        {[{ label: 'Finished Goods', val: aggregate.fg, color: 'bg-teal-500' }, { label: 'Semi-Finished', val: aggregate.sfg, color: 'bg-orange-500' }, { label: 'WIP Floor', val: aggregate.wip, color: 'bg-rose-500' }].map((cat) => (
-                            <div key={cat.label}><div className="flex justify-between text-sm font-bold text-gray-600 mb-2"><span>{cat.label}</span><span>{Math.round((cat.val / (aggregate.total || 1)) * 100)}%</span></div><div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${cat.color} shadow-sm`} style={{ width: `${(cat.val / (aggregate.total || 1)) * 100}%` }}></div></div></div>
-                        ))}
-                    </div>
-                </div>
-                <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/40 overflow-hidden">
-                     <h3 className="font-extrabold text-gray-800 mb-8 flex items-center gap-3 text-lg"><TrendingUp className="w-6 h-6 text-blue-500" /> Daily Output Trend</h3>
-                    <div className="flex items-end justify-between gap-3 h-48 mt-8">
-                        {filteredHistory.slice(-14).map((h, i) => {
-                            const max = Math.max(...filteredHistory.map(x => x.units), 100);
-                            const height = Math.max((h.units / max) * 100, 5);
-                            return (<div key={i} className="flex flex-col items-center flex-1 group relative"><div className="w-full bg-blue-100 rounded-t-lg group-hover:bg-blue-500 transition-all relative duration-300" style={{ height: `${height}%` }}><div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">{h.units}</div></div><span className="text-[10px] font-bold text-gray-300 group-hover:text-gray-500 mt-3 rotate-0 truncate w-full text-center transition-colors">{h.day.split('-')[2]}</span></div>);
-                        })}
-                        {filteredHistory.length === 0 && <div className="w-full text-center text-gray-400 text-sm self-center font-medium italic">No history data available yet.</div>}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // --- INVENTORY VIEW (NEW) ---
 const InventoryView = () => {
     const [inventory, setInventory] = useState([]);
@@ -1142,6 +1060,46 @@ const InventoryView = () => {
         });
         return () => unsub();
     }, []);
+
+    const handleResetInventory = async () => {
+        const pwd = prompt("Enter Admin Password to DELETE ALL Inventory:");
+        if (pwd !== 'HV@2026') {
+            if(pwd !== null) alert("Incorrect Password");
+            return;
+        }
+        
+        if (!confirm("WARNING: This will permanently delete all inventory records. Are you absolutely sure?")) return;
+
+        setIsUploading(true);
+        try {
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'));
+            const snapshot = await getDocs(q);
+            
+            // Delete in batches of 400 to respect Firestore limits
+            const chunks = [];
+            let currentBatch = writeBatch(db);
+            let count = 0;
+            
+            snapshot.docs.forEach((doc) => {
+                currentBatch.delete(doc.ref);
+                count++;
+                if (count >= 400) {
+                    chunks.push(currentBatch.commit());
+                    currentBatch = writeBatch(db);
+                    count = 0;
+                }
+            });
+            if (count > 0) chunks.push(currentBatch.commit());
+            
+            await Promise.all(chunks);
+            alert("Inventory reset successful.");
+        } catch (e) {
+            console.error(e);
+            alert("Error resetting inventory.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     const handleInventoryUpload = (e) => {
         const file = e.target.files[0];
@@ -1243,6 +1201,10 @@ const InventoryView = () => {
                         
                         <button onClick={handleInventoryExport} className="flex items-center gap-2 px-4 py-2 bg-teal-50 text-teal-600 rounded-xl font-bold hover:bg-teal-100 transition text-sm">
                             <Download className="w-4 h-4" /> Export
+                        </button>
+
+                        <button onClick={handleResetInventory} disabled={isUploading} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition text-sm">
+                            <Trash2 className="w-4 h-4" /> Reset
                         </button>
                     </div>
                  </div>
@@ -1556,7 +1518,6 @@ const AdminDashboard = ({ user, logout }) => {
         tabs={[
             { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'REPORTS', label: 'Reports', icon: FileText }, // Replaced FileSpreadsheet
-            { id: 'STATS', label: 'Stats', icon: BarChart3 },
             { id: 'INVENTORY', label: 'Inventory', icon: Package }, 
             { id: 'SETTINGS', label: 'Settings', icon: Settings },
         ]}
@@ -1564,7 +1525,6 @@ const AdminDashboard = ({ user, logout }) => {
         <CategoryDetailModal category={detailCategory} onClose={() => setDetailCategory(null)} orders={allOrders} />
 
         {view === 'REPORTS' && <ReportsView allOrders={allOrders} stats={stats} />}
-        {view === 'STATS' && <StatsView currentOrders={allOrders} />}
         {view === 'INVENTORY' && <InventoryView />}
         {view === 'SETTINGS' && <SettingsView />}
         
@@ -1786,8 +1746,16 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
   const [skuMappings, setSkuMappings] = useState({});
   const [reverseMappings, setReverseMappings] = useState({}); 
   const [scanError, setScanError] = useState(null);
+  const [lastAction, setLastAction] = useState(null); // New state for non-blocking feedback
   const scanInputRef = useRef(null);
   const scanTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (lastAction) {
+        const timer = setTimeout(() => setLastAction(null), 3000);
+        return () => clearTimeout(timer);
+    }
+  }, [lastAction]);
 
   useEffect(() => {
     if (!db) return;
@@ -1868,10 +1836,11 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
       } catch (error) { console.error("Error:", error); }
   };
 
-  const handleStockIn = async (qty) => {
-      if (!targetStockSku) return;
+  const handleStockIn = async (qty, skuOverride) => {
+      const sku = skuOverride || targetStockSku;
+      if (!sku) return;
       try {
-          const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', targetStockSku);
+          const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', sku);
           await setDoc(invRef, {
               quantity: increment(qty),
               updatedAt: serverTimestamp(),
@@ -1880,19 +1849,17 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
           setStockInModalOpen(false);
           setTargetStockSku(null);
           setScanQuery('');
-          alert(`Added ${qty} units to ${targetStockSku}`);
+          setLastAction({ type: 'success', msg: `Stock In: +${qty} ${sku}` });
       } catch (error) {
           console.error("Stock in error:", error);
       }
   };
 
-  const handleStockOut = async (qty) => {
-    if (!targetStockSku) return;
+  const handleStockOut = async (qty, skuOverride) => {
+    const sku = skuOverride || targetStockSku;
+    if (!sku) return;
     try {
-        const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', targetStockSku);
-        // Check if sufficient stock exists (optional, currently allowing negative stock)
-        // For strict control, we'd need a transaction or security rule.
-        // Here we just decrement.
+        const invRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', sku);
         await setDoc(invRef, {
             quantity: increment(-qty), // Decrementing
             updatedAt: serverTimestamp(),
@@ -1901,7 +1868,7 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
         setStockOutModalOpen(false);
         setTargetStockSku(null);
         setScanQuery('');
-        alert(`Removed ${qty} units of ${targetStockSku}`);
+        setLastAction({ type: 'warning', msg: `Stock Out: -${qty} ${sku}` });
     } catch (error) {
         console.error("Stock out error:", error);
     }
@@ -1931,14 +1898,12 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
     const resolvedSku = mappedMaster || raw; 
 
     if (role === 'STOCK_IN') {
-        setTargetStockSku(resolvedSku);
-        setStockInModalOpen(true);
+        handleStockIn(1, resolvedSku);
         return;
     }
 
     if (role === 'STOCK_OUT') {
-        setTargetStockSku(resolvedSku);
-        setStockOutModalOpen(true);
+        handleStockOut(1, resolvedSku);
         return;
     }
     
@@ -2163,6 +2128,12 @@ const StaffDashboard = ({ role, loggedInUser, logout }) => {
             </div>
         </div>
         {scanError && <div className="bg-red-50 text-red-500 text-xs font-bold mt-2 ml-2 py-1 px-3 rounded-lg inline-block animate-bounce">{scanError}</div>}
+        {lastAction && (
+            <div className={`mt-2 ml-2 py-2 px-4 rounded-xl inline-flex items-center gap-2 font-bold text-sm shadow-sm animate-in slide-in-from-top-1 fade-in ${lastAction.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
+                {lastAction.type === 'success' ? <Download className="w-4 h-4"/> : <Upload className="w-4 h-4"/>}
+                {lastAction.msg}
+            </div>
+        )}
 
         {/* Master SKU Filter - Hidden for Stock In/Out */}
         {role !== 'STOCK_IN' && role !== 'STOCK_OUT' && Object.keys(masterSkuStats).length > 0 && (
@@ -2275,13 +2246,15 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
-      // START FIX: Removed custom token logic to prevent ReferenceError and Mismatch Error
       try {
-        await signInAnonymously(auth);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
       } catch (error) {
         console.error("Auth failed:", error);
       }
-      // END FIX
     };
     initAuth();
     // Load XLSX
@@ -2311,9 +2284,9 @@ export default function App() {
 
   if (!auth) return <div className="h-screen flex items-center justify-center text-red-500">Firebase Config Error</div>;
   if (!user) return <div className="h-screen flex items-center justify-center text-gray-400 gap-3 font-medium bg-gray-50"><Loader2 className="animate-spin w-6 h-6 text-violet-600" /> Loading Warehouse System...</div>;
-   
+    
   if (!role) return <RoleSelection onSelectRole={handleRoleSelection} />;
-   
+    
   return role === 'ADMIN' 
     ? <AdminDashboard user={user} logout={handleLogout} /> 
     : <StaffDashboard role={role} loggedInUser={loggedInUser} logout={handleLogout} />;
